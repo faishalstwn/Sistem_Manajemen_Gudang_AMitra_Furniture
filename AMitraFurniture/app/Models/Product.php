@@ -60,4 +60,19 @@ class Product extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    public function stockMovements()
+    {
+        return $this->hasMany(StockMovement::class)->latest();
+    }
+
+    public function barangMasuk()
+    {
+        return $this->hasMany(BarangMasuk::class, 'produk_id');
+    }
+
+    public function barangKeluar()
+    {
+        return $this->hasMany(BarangKeluar::class, 'produk_id');
+    }
 }

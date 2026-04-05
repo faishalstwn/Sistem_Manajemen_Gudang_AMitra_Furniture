@@ -10,6 +10,10 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AdminProductController;
 use App\Http\Controllers\AdminOrderController;
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AdminWarehouseController;
+use App\Http\Controllers\AdminBarangMasukController;
+use App\Http\Controllers\AdminBarangKeluarController;
+use App\Http\Controllers\AdminExportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -174,4 +178,63 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::get('/admin/notifikasi', fn () => view('admin.notifikasi'))
         ->name('admin.notifikasi');
+
+    // ── WMS MONITOR ──────────────────────────────────────────────────────
+    Route::get('/admin/gudang', [AdminDashboardController::class, 'gudang'])
+        ->name('admin.gudang');
+
+    // ── WAREHOUSE MANAGEMENT (CRUD STOK) ──────────────────────────────
+    Route::get('/admin/gudang/kelola', [AdminWarehouseController::class, 'index'])
+        ->name('admin.gudang.kelola');
+
+    Route::get('/admin/gudang/riwayat', [AdminWarehouseController::class, 'riwayat'])
+        ->name('admin.gudang.riwayat');
+
+    // Stok Masuk
+    Route::get('/admin/gudang/{product}/stok-masuk', [AdminWarehouseController::class, 'stokMasukForm'])
+        ->name('admin.gudang.stok-masuk.form');
+    Route::post('/admin/gudang/{product}/stok-masuk', [AdminWarehouseController::class, 'stokMasuk'])
+        ->name('admin.gudang.stok-masuk');
+
+    // Stok Keluar
+    Route::get('/admin/gudang/{product}/stok-keluar', [AdminWarehouseController::class, 'stokKeluarForm'])
+        ->name('admin.gudang.stok-keluar.form');
+    Route::post('/admin/gudang/{product}/stok-keluar', [AdminWarehouseController::class, 'stokKeluar'])
+        ->name('admin.gudang.stok-keluar');
+
+    // Koreksi / Adjustment
+    Route::get('/admin/gudang/{product}/adjustment', [AdminWarehouseController::class, 'adjustmentForm'])
+        ->name('admin.gudang.adjustment.form');
+    Route::post('/admin/gudang/{product}/adjustment', [AdminWarehouseController::class, 'adjustment'])
+        ->name('admin.gudang.adjustment');
+
+    // ── BARANG MASUK ──────────────────────────────────────────────────
+    Route::get('/admin/barang-masuk', [AdminBarangMasukController::class, 'index'])
+        ->name('admin.barang-masuk.index');
+    Route::get('/admin/barang-masuk/create', [AdminBarangMasukController::class, 'create'])
+        ->name('admin.barang-masuk.create');
+    Route::post('/admin/barang-masuk', [AdminBarangMasukController::class, 'store'])
+        ->name('admin.barang-masuk.store');
+
+    // ── BARANG KELUAR ─────────────────────────────────────────────────
+    Route::get('/admin/barang-keluar', [AdminBarangKeluarController::class, 'index'])
+        ->name('admin.barang-keluar.index');
+    Route::get('/admin/barang-keluar/create', [AdminBarangKeluarController::class, 'create'])
+        ->name('admin.barang-keluar.create');
+    Route::post('/admin/barang-keluar', [AdminBarangKeluarController::class, 'store'])
+        ->name('admin.barang-keluar.store');
+
+    // ── EXPORT LAPORAN ────────────────────────────────────────────────
+    Route::get('/admin/export/excel/stok', [AdminExportController::class, 'excelStok'])
+        ->name('admin.export.excel.stok');
+    Route::get('/admin/export/excel/barang-masuk', [AdminExportController::class, 'excelBarangMasuk'])
+        ->name('admin.export.excel.barang-masuk');
+    Route::get('/admin/export/excel/barang-keluar', [AdminExportController::class, 'excelBarangKeluar'])
+        ->name('admin.export.excel.barang-keluar');
+    Route::get('/admin/export/pdf/stok', [AdminExportController::class, 'pdfStok'])
+        ->name('admin.export.pdf.stok');
+    Route::get('/admin/export/pdf/barang-masuk', [AdminExportController::class, 'pdfBarangMasuk'])
+        ->name('admin.export.pdf.barang-masuk');
+    Route::get('/admin/export/pdf/barang-keluar', [AdminExportController::class, 'pdfBarangKeluar'])
+        ->name('admin.export.pdf.barang-keluar');
 });

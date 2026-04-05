@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\BarangMasuk;
+use App\Models\BarangKeluar;
 use Illuminate\Support\Facades\DB;
 
 class AdminDashboardController extends Controller
@@ -119,6 +121,72 @@ class AdminDashboardController extends Controller
             'bulan',
             'monthName',
             'year'
+        ));
+    }
+
+    // ──────────────────────────────────────────────────────
+    // Halaman Dashboard Statistik Gudang
+    // ──────────────────────────────────────────────────────
+    public function gudang()
+    {
+        // Produk yang perlu diperhatikan
+        $lowStockProducts = Product::where('stock', '<', 10)
+            ->orderBy('stock')
+            ->get();
+
+        $outOfStockProducts = Product::where('stock', 0)->get();
+
+        $allProducts = Product::orderBy('name')->get();
+
+        // Pesanan yang sudah dibayar & perlu diproses
+        $pendingShipmentOrders = Order::with(['user', 'orderItems.product'])
+            ->where('status', 'processing')
+            ->where('payment_status', 'paid')
+            ->latest()
+            ->take(20)
+            ->get();
+
+        // ── DATA CHART ─────────────────────────────────────
+        // 12 bulan terakhir
+        $months      = [];
+        $masukPerBulan  = [];
+        $keluarPerBulan = [];
+
+        for ($i = 11; $i >= 0; $i--) {
+            $date  = now()->subMonths($i);
+            $label = $date->format('M Y');
+            $months[] = $label;
+
+            $masukPerBulan[] = BarangMasuk::whereYear('tanggal_masuk', $date->year)
+                ->whereMonth('tanggal_masuk', $date->month)
+                ->sum('jumlah') ?? 0;
+
+            $keluarPerBulan[] = BarangKeluar::whereYear('tanggal_keluar', $date->year)
+                ->whereMonth('tanggal_keluar', $date->month)
+                ->sum('jumlah') ?? 0;
+        }
+
+        // Top 10 produk berdasarkan stok terbanyak
+        $topStokProducts = Product::orderByDesc('stock')
+            ->take(10)
+            ->get();
+
+        $chartLabels      = $months;
+        $chartMasuk       = $masukPerBulan;
+        $chartKeluar      = $keluarPerBulan;
+        $chartTopStokNames = $topStokProducts->pluck('name')->map(fn($n) => \Illuminate\Support\Str::limit($n, 20))->toArray();
+        $chartTopStokData  = $topStokProducts->pluck('stock')->toArray();
+
+        return view('admin.gudang', compact(
+            'lowStockProducts',
+            'outOfStockProducts',
+            'allProducts',
+            'pendingShipmentOrders',
+            'chartLabels',
+            'chartMasuk',
+            'chartKeluar',
+            'chartTopStokNames',
+            'chartTopStokData',
         ));
     }
 }

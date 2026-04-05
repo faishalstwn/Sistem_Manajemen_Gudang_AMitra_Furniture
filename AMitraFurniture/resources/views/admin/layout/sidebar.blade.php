@@ -16,6 +16,26 @@
 
     <hr>
 
+    {{-- ── WMS Integration ─────────────────────────────── --}}
+    <small class="text-muted px-3 d-block mb-1" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Gudang</small>
+    <a href="{{ route('admin.gudang') }}" class="{{ request()->routeIs('admin.gudang') ? 'active' : '' }}">
+        <i class="fas fa-chart-bar me-2"></i>Monitor Gudang
+    </a>
+    <a href="{{ route('admin.gudang.kelola') }}" class="{{ request()->routeIs('admin.gudang.kelola') ? 'active' : '' }}">
+        <i class="fas fa-warehouse me-2"></i>Manajemen Stok
+    </a>
+    <a href="{{ route('admin.barang-masuk.index') }}" class="{{ request()->routeIs('admin.barang-masuk.*') ? 'active' : '' }}">
+        <i class="fas fa-arrow-circle-down me-2 text-success"></i>Barang Masuk
+    </a>
+    <a href="{{ route('admin.barang-keluar.index') }}" class="{{ request()->routeIs('admin.barang-keluar.*') ? 'active' : '' }}">
+        <i class="fas fa-arrow-circle-up me-2 text-danger"></i>Barang Keluar
+    </a>
+    <a href="{{ route('admin.gudang.riwayat') }}" class="{{ request()->routeIs('admin.gudang.riwayat') ? 'active' : '' }}">
+        <i class="fas fa-history me-2"></i>Riwayat Stok
+    </a>
+
+    <hr>
+
     <form method="POST" action="{{ route('logout') }}">
         @csrf
         <button class="btn btn-danger w-100">

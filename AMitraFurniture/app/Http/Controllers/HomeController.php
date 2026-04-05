@@ -37,9 +37,8 @@ class HomeController extends Controller
         return view('dashboard.home', compact('products'));
     }
 
-    /**
-     * Tampilkan halaman kategori tertentu
-     */
+   
+     
     public function category($category)
     {
         // Validasi kategori yang tersedia
