@@ -75,4 +75,26 @@ class Product extends Model
     {
         return $this->hasMany(BarangKeluar::class, 'produk_id');
     }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class)->latest();
+    }
+
+    public function locations()
+    {
+        return $this->belongsToMany(WarehouseLocation::class, 'location_product')
+                    ->withPivot('jumlah')
+                    ->withTimestamps();
+    }
+
+    public function averageRating()
+    {
+        return $this->reviews()->avg('rating');
+    }
+
+    public function reviewsCount()
+    {
+        return $this->reviews()->count();
+    }
 }

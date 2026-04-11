@@ -117,7 +117,19 @@
                             </h5>
                             
                             <div class="form-check mb-3">
-                                <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod" checked>
+                                <input class="form-check-input" type="radio" name="payment_method" id="midtrans" value="midtrans" checked>
+                                <label class="form-check-label d-flex align-items-center" for="midtrans">
+                                    <i class="fas fa-credit-card text-info me-2"></i>
+                                    <div>
+                                        <strong>Midtrans Payment Gateway</strong>
+                                        <div class="small text-muted">Kartu Kredit, E-Wallet, Transfer Bank</div>
+                                        <span class="badge bg-info small mt-1">Recommended</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod">
                                 <label class="form-check-label d-flex align-items-center" for="cod">
                                     <i class="fas fa-money-bill-wave text-success me-2"></i>
                                     <div>

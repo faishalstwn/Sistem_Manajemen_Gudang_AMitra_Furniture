@@ -81,7 +81,15 @@
                         </div>
                         <div class="card-body">
                             <div class="form-check mb-3">
-                                <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod" checked>
+                                <input class="form-check-input" type="radio" name="payment_method" id="midtrans" value="midtrans" checked>
+                                <label class="form-check-label" for="midtrans">
+                                    <strong><i class="fas fa-credit-card me-2 text-info"></i>Midtrans Payment Gateway</strong>
+                                    <p class="text-muted mb-0 small">Kartu Kredit/Debit, E-Wallet (GoPay, OVO, DANA), Transfer Bank</p>
+                                    <span class="badge bg-info small">Recommended</span>
+                                </label>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="payment_method" id="cod" value="cod">
                                 <label class="form-check-label" for="cod">
                                     <strong><i class="fas fa-money-bill-wave me-2 text-success"></i>Cash on Delivery (COD)</strong>
                                     <p class="text-muted mb-0 small">Bayar saat barang diterima</p>

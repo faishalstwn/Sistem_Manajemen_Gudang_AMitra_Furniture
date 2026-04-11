@@ -27,6 +27,8 @@ class User extends Authenticatable
         'is_admin', // ✅ WAJIB
         'google_id',
         'avatar',
+        'phone',
+        'address',
     ];
 
     protected $hidden = [

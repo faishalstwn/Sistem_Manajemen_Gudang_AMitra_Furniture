@@ -33,6 +33,9 @@
     <a href="{{ route('admin.gudang.riwayat') }}" class="{{ request()->routeIs('admin.gudang.riwayat') ? 'active' : '' }}">
         <i class="fas fa-history me-2"></i>Riwayat Stok
     </a>
+    <a href="{{ route('admin.lokasi-gudang.peta') }}" class="{{ request()->routeIs('admin.lokasi-gudang.*') ? 'active' : '' }}">
+        <i class="fas fa-map-marked-alt me-2 text-info"></i>Peta Gudang
+    </a>
 
     <hr>
 

@@ -7,18 +7,18 @@
 
             <nav aria-label="breadcrumb" class="mb-3">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ route('admin.barang-keluar.index') }}">Barang Keluar</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('admin.barang-masuk.index') }}">Barang Masuk</a></li>
                     <li class="breadcrumb-item active">Tambah Baru</li>
                 </ol>
             </nav>
 
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i class="fas fa-minus-circle me-2"></i>Tambah Barang Keluar</h5>
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Tambah Barang Masuk</h5>
                 </div>
                 <div class="card-body">
 
-                    <form method="POST" action="{{ route('admin.barang-keluar.store') }}">
+                    <form method="POST" action="{{ route('admin.barang-masuk.store') }}">
                         @csrf
 
                         <div class="mb-3">
@@ -31,7 +31,7 @@
                                             data-stock="{{ $product->stock }}"
                                             {{ old('produk_id') == $product->id ? 'selected' : '' }}>
                                         {{ $product->name }}
-                                        (Stok: {{ $product->stock }})
+                                        (Stok Saat Ini: {{ $product->stock }})
                                     </option>
                                 @endforeach
                             </select>
@@ -42,9 +42,9 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Jumlah Keluar <span class="text-danger">*</span></label>
+                            <label class="form-label fw-semibold">Jumlah Masuk <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <span class="input-group-text bg-danger text-white"><i class="fas fa-minus"></i></span>
+                                <span class="input-group-text bg-success text-white"><i class="fas fa-plus"></i></span>
                                 <input type="number" name="jumlah" id="jumlahInput" min="1"
                                        class="form-control form-control-lg @error('jumlah') is-invalid @enderror"
                                        value="{{ old('jumlah') }}" placeholder="0" required>
@@ -58,20 +58,20 @@
 
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold">Tanggal Keluar <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal_keluar"
-                                       class="form-control @error('tanggal_keluar') is-invalid @enderror"
-                                       value="{{ old('tanggal_keluar', date('Y-m-d')) }}" required>
-                                @error('tanggal_keluar')
+                                <label class="form-label fw-semibold">Tanggal Masuk <span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal_masuk"
+                                       class="form-control @error('tanggal_masuk') is-invalid @enderror"
+                                       value="{{ old('tanggal_masuk', date('Y-m-d')) }}" required>
+                                @error('tanggal_masuk')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold">Tujuan</label>
-                                <input type="text" name="tujuan"
-                                       class="form-control @error('tujuan') is-invalid @enderror"
-                                       value="{{ old('tujuan') }}" placeholder="Tujuan pengiriman (opsional)">
-                                @error('tujuan')
+                                <label class="form-label fw-semibold">Supplier</label>
+                                <input type="text" name="supplier"
+                                       class="form-control @error('supplier') is-invalid @enderror"
+                                       value="{{ old('supplier') }}" placeholder="Nama supplier (opsional)">
+                                @error('supplier')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
@@ -88,11 +88,11 @@
                         </div>
 
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-danger flex-fill"
-                                    onclick="return confirm('Yakin ingin mencatat pengeluaran barang ini?')">
-                                <i class="fas fa-save me-2"></i>Simpan Barang Keluar
+                            <button type="submit" class="btn btn-success flex-fill"
+                                    onclick="return confirm('Yakin ingin menyimpan data barang masuk ini?')">
+                                <i class="fas fa-save me-2"></i>Simpan Barang Masuk
                             </button>
-                            <a href="{{ route('admin.barang-keluar.index') }}" class="btn btn-outline-secondary">
+                            <a href="{{ route('admin.barang-masuk.index') }}" class="btn btn-outline-secondary">
                                 Batal
                             </a>
                         </div>
@@ -117,23 +117,14 @@ function updateInfo() {
 
     if (produkSelect.value) {
         stokInfo.textContent = `Stok saat ini: ${stock} unit`;
-        jumlahInput.max = stock;
     } else {
         stokInfo.textContent = '';
     }
 
     if (produkSelect.value && qty > 0) {
-        const sisa = stock - qty;
-        if (sisa < 0) {
-            stokBaru.className = 'mt-1 small fw-semibold text-danger';
-            stokBaru.textContent = `⚠ Jumlah melebihi stok! Stok hanya ${stock} unit.`;
-        } else if (sisa < 10) {
-            stokBaru.className = 'mt-1 small fw-semibold text-warning';
-            stokBaru.textContent = `Stok setelah simpan: ${sisa} unit (peringatan: stok rendah)`;
-        } else {
-            stokBaru.className = 'mt-1 small fw-semibold text-success';
-            stokBaru.textContent = `Stok setelah simpan: ${sisa} unit`;
-        }
+        const total = stock + qty;
+        stokBaru.className = 'mt-1 small fw-semibold text-success';
+        stokBaru.textContent = `Stok setelah simpan: ${total} unit`;
     } else {
         stokBaru.textContent = '';
     }

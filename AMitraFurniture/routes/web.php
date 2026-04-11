@@ -7,6 +7,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\AdminProductController;
 use App\Http\Controllers\AdminOrderController;
 use App\Http\Controllers\AdminDashboardController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\AdminWarehouseController;
 use App\Http\Controllers\AdminBarangMasukController;
 use App\Http\Controllers\AdminBarangKeluarController;
 use App\Http\Controllers\AdminExportController;
+use App\Http\Controllers\AdminLokasiGudangController;
 
 /*
 |--------------------------------------------------------------------------
@@ -78,6 +80,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/profil', [ProfileController::class, 'show'])->name('profile.show');
     Route::patch('/profil', [ProfileController::class, 'update'])->name('profile.update');
+    Route::patch('/profil/password', [ProfileController::class, 'updatePassword'])->name('profile.updatePassword');
 
     Route::get('/checkout', [OrderController::class, 'checkout'])->name('orders.checkout');
     Route::get('/checkout/{id}', [ProductController::class, 'checkout'])->name('checkout.direct');
@@ -90,13 +93,21 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/track', [OrderController::class, 'track'])->name('orders.track');
     Route::post('/orders/{order}/confirm-payment', [OrderController::class, 'confirmPayment'])->name('orders.confirmPayment');
     
     // FILTER ORDERS WITH OPTIONAL STATUS
     Route::get('/orders/filter/{status?}', [OrderController::class, 'filter'])->name('orders.filter');
 
+    // REVIEWS
+    Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
+
+    // Payment Pages
     Route::get('/payment/page/{order}', [OrderController::class, 'paymentPage'])
         ->name('payment.page');
+
+    Route::get('/payment/finish/{order}', [OrderController::class, 'finishPayment'])
+        ->name('payment.finish');
 
     Route::get('/payment/success/{order}', [OrderController::class, 'paymentSuccess'])
         ->name('payment.success');
@@ -227,6 +238,30 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // ── EXPORT LAPORAN ────────────────────────────────────────────────
     Route::get('/admin/export/excel/stok', [AdminExportController::class, 'excelStok'])
         ->name('admin.export.excel.stok');
+
+    // ── PETA LOKASI GUDANG ────────────────────────────────────────────
+    Route::get('/admin/lokasi-gudang/peta', [AdminLokasiGudangController::class, 'peta'])
+        ->name('admin.lokasi-gudang.peta');
+    Route::get('/admin/lokasi-gudang', [AdminLokasiGudangController::class, 'index'])
+        ->name('admin.lokasi-gudang.index');
+    Route::get('/admin/lokasi-gudang/create', [AdminLokasiGudangController::class, 'create'])
+        ->name('admin.lokasi-gudang.create');
+    Route::post('/admin/lokasi-gudang', [AdminLokasiGudangController::class, 'store'])
+        ->name('admin.lokasi-gudang.store');
+    Route::get('/admin/lokasi-gudang/{location}', [AdminLokasiGudangController::class, 'show'])
+        ->name('admin.lokasi-gudang.show');
+    Route::get('/admin/lokasi-gudang/{location}/edit', [AdminLokasiGudangController::class, 'edit'])
+        ->name('admin.lokasi-gudang.edit');
+    Route::put('/admin/lokasi-gudang/{location}', [AdminLokasiGudangController::class, 'update'])
+        ->name('admin.lokasi-gudang.update');
+    Route::delete('/admin/lokasi-gudang/{location}', [AdminLokasiGudangController::class, 'destroy'])
+        ->name('admin.lokasi-gudang.destroy');
+    Route::post('/admin/lokasi-gudang/{location}/assign', [AdminLokasiGudangController::class, 'assignProduct'])
+        ->name('admin.lokasi-gudang.assign');
+    Route::delete('/admin/lokasi-gudang/{location}/remove/{product}', [AdminLokasiGudangController::class, 'removeProduct'])
+        ->name('admin.lokasi-gudang.remove');
+    Route::patch('/admin/lokasi-gudang/{location}/qty/{product}', [AdminLokasiGudangController::class, 'updateProductQty'])
+        ->name('admin.lokasi-gudang.update-qty');
     Route::get('/admin/export/excel/barang-masuk', [AdminExportController::class, 'excelBarangMasuk'])
         ->name('admin.export.excel.barang-masuk');
     Route::get('/admin/export/excel/barang-keluar', [AdminExportController::class, 'excelBarangKeluar'])

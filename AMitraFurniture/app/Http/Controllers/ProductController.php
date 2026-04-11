@@ -33,7 +33,12 @@ class ProductController extends Controller
                                   ->limit(4)
                                   ->get();
         
-        return view('dashboard.product-detail', compact('product', 'relatedProducts'));
+        // Load reviews with user data
+        $reviews = $product->reviews()->with('user')->latest()->get();
+        $averageRating = $product->reviews()->avg('rating');
+        $totalReviews = $product->reviews()->count();
+        
+        return view('dashboard.product-detail', compact('product', 'relatedProducts', 'reviews', 'averageRating', 'totalReviews'));
     }
     
    public function checkout($id)

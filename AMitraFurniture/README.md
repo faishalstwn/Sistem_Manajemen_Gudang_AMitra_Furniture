@@ -1,59 +1,224 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# AMitra Furniture - Sistem Manajemen Inventory & E-Commerce
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi web untuk manajemen inventory furniture dan e-commerce berbasis Laravel.
 
-## About Laravel
+## 🚀 Fitur Utama
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Manajemen Produk**: CRUD produk furniture lengkap dengan kategori, harga, dan stok
+- **Inventory Management**: Barang Masuk & Barang Keluar dengan tracking lengkap
+- **E-Commerce**: Shopping cart, checkout dengan multiple payment methods
+- **Payment Gateway**: Integrasi Midtrans Snap untuk pembayaran online (Credit Card, E-Wallet, Bank Transfer)
+- **Export Data**: Export laporan ke Excel dan PDF
+- **Dashboard Admin**: Statistik penjualan dan inventory real-time
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 📋 Persyaratan Sistem
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP >= 8.2
+- Composer
+- Node.js & NPM
+- SQLite (atau database lain sesuai preference)
 
-## Learning Laravel
+## 🔧 Instalasi & Setup
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Ikuti langkah-langkah berikut **dengan urutan yang benar** setelah clone repository:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 1. Clone Repository
+```bash
+git clone <repository-url>
+cd AMitraFurniture
+```
 
-## Laravel Sponsors
+### 2. Install Dependencies
+```bash
+# Install PHP dependencies
+composer install
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# Install NPM dependencies
+npm install
+```
 
-### Premium Partners
+### 3. Setup Environment
+```bash
+# Copy file .env.example menjadi .env
+cp .env.example .env
+# Untuk Windows gunakan:
+# copy .env.example .env
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+# Generate application key
+php artisan key:generate
+```
 
-## Contributing
+### 4. Setup Database
+```bash
+# Buat file database SQLite (jika menggunakan SQLite)
+# Untuk Windows:
+type nul > database/database.sqlite
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+# Untuk Linux/Mac:
+touch database/database.sqlite
 
-## Code of Conduct
+# Jalankan migration untuk membuat tabel
+php artisan migrate
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Jalankan seeder untuk mengisi data awal (PENTING!)
+php artisan db:seed
+```
 
-## Security Vulnerabilities
+> ⚠️ **PENTING**: Langkah `php artisan db:seed` **WAJIB** dijalankan untuk mengisi data produk awal. Tanpa ini, aplikasi akan kosong tanpa produk.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 5. Setup Storage & Assets
+```bash
+# Link storage folder
+php artisan storage:link
 
-## License
+# Build assets (jika ada)
+npm run build
+# atau untuk development:
+npm run dev
+```
+
+### 6. Konfigurasi Midtrans Payment Gateway (Opsional)
+
+Untuk mengaktifkan pembayaran online dengan Midtrans:
+
+**Quick Setup:**
+```env
+# Edit file .env
+MIDTRANS_MERCHANT_ID=your_merchant_id
+MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxxxxxxxxxxxxxx
+MIDTRANS_SERVER_KEY=SB-Mid-server-xxxxxxxxxxxxxxxx
+MIDTRANS_IS_PRODUCTION=false
+```
+
+**📖 Panduan Lengkap:** Lihat [MIDTRANS_SETUP.md](MIDTRANS_SETUP.md) untuk:
+- Cara daftar akun Midtrans (gratis)
+- Mendapatkan credentials Sandbox
+- Testing payment dengan test card
+- Setup production
+- Troubleshooting
+
+> 💡 Tanpa setup Midtrans, aplikasi tetap bisa digunakan dengan metode pembayaran COD dan Transfer Bank manual.
+
+### 7. Jalankan Aplikasi
+```bash
+php artisan serve
+```
+
+Aplikasi akan berjalan di `http://localhost:8000`
+
+## 👤 Akun Default
+
+Setelah menjalankan seeder, Anda dapat login dengan:
+- **Email**: test@example.com
+- **Password**: password
+
+## 📦 Data Seeder
+
+Seeder akan mengisi:
+- 1 User test account
+- Data produk furniture (Sofa, Meja, Kursi, Lemari, dll)
+
+## 🛠️ Perintah Berguna
+
+```bash
+# Reset database dan jalankan ulang seeder
+php artisan migrate:fresh --seed
+
+# Clear cache
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+# Generate IDE helper (untuk development)
+php artisan ide-helper:generate
+```
+
+## 📝 Troubleshooting
+
+### Data Produk Tidak Muncul?
+Pastikan Anda sudah menjalankan:
+```bash
+php artisan db:seed
+```
+
+### Error "No application encryption key"?
+Jalankan:
+```bash
+php artisan key:generate
+```
+
+### Error Database?
+Pastikan file `database/database.sqlite` sudah dibuat dan migration sudah dijalankan.
+
+### Error Permission (Linux/Mac)?
+```bash
+chmod -R 775 storage bootstrap/cache
+```
+
+## 📚 Struktur Proyek
+
+```
+AMitraFurniture/
+├── app/
+│   ├── Http/Controllers/  # Controllers
+│   ├── Models/            # Eloquent Models
+│   ├── Exports/           # Excel Export Classes
+│   └── Helpers/           # Helper Classes (Midtrans, dll)
+├── database/
+│   ├── migrations/        # Database Migrations
+│   └── seeders/           # Database Seeders
+├── resources/
+│   └── views/             # Blade Templates
+├── routes/
+│   └── web.php            # Web Routes
+└── public/
+    └── assets/            # Images & Static Files
+```
+
+## 💳 Metode Pembayaran
+
+Aplikasi mendukung berbagai metode pembayaran:
+
+### 1. Midtrans Payment Gateway (Online)
+- **Credit/Debit Card** (Visa, Mastercard, JCB)
+- **E-Wallet** (GoPay, OVO, DANA, ShopeePay, LinkAja)
+- **Bank Transfer** (BCA, Mandiri, BNI, BRI, Permata)
+- **Indomaret/Alfamart** (Over the counter)
+
+**Cara Menggunakan:**
+1. Checkout dan pilih "Midtrans" sebagai payment method
+2. Klik "Bayar Sekarang"
+3. Pilih metode pembayaran di popup Midtrans Snap
+4. Selesaikan pembayaran
+5. Otomatis redirect ke halaman sukses
+
+**Setup:** Lihat [MIDTRANS_SETUP.md](MIDTRANS_SETUP.md)
+
+### 2. Transfer Bank Manual
+- Transfer BCA
+- Transfer BRI  
+- Transfer Mandiri
+
+**Flow:**
+1. Customer pilih bank transfer saat checkout
+2. Sistem tampilkan nomor rekening
+3. Customer transfer manual
+4. Customer konfirmasi pembayaran di halaman order
+5. Admin verifikasi dan update status
+
+### 3. Cash on Delivery (COD)
+Pembayaran dilakukan saat barang diterima.
+
+## 🤝 Contributing
+
+Untuk berkontribusi:
+1. Fork repository
+2. Buat branch baru (`git checkout -b feature/AmazingFeature`)
+3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
+4. Push ke branch (`git push origin feature/AmazingFeature`)
+5. Buat Pull Request
+
+## 📄 License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

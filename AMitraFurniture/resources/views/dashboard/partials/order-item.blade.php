@@ -79,6 +79,9 @@
             <strong class="text-primary">Total: Rp {{ number_format($order->total_price, 0, ',', '.') }}</strong>
         </div>
         <div>
+            <a href="{{ route('orders.track', $order->id) }}" class="btn btn-sm btn-primary" title="Lacak Pesanan">
+                <i class="fas fa-map-marked-alt me-1"></i>Lacak
+            </a>
             <a href="{{ route('orders.show', $order->id) }}" class="btn btn-sm btn-outline-primary">
                 <i class="fas fa-eye me-1"></i>Detail
             </a>

@@ -266,7 +266,124 @@
                     </div>
                 </div>
 
+                {{-- Review Section (Only for delivered orders) --}}
+                @if($order->status === 'delivered' && $order->orderItems && $order->orderItems->count() > 0)
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-star me-2 text-warning"></i>Ulasan Produk</h5>
+                    </div>
+                    <div class="card-body">
+                        @if(session('success'))
+                            <div class="alert alert-success alert-dismissible fade show">
+                                <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        @endif
+                        
+                        @if(session('error'))
+                            <div class="alert alert-danger alert-dismissible fade show">
+                                <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        @endif
+
+                        <p class="text-muted mb-4">Bagaimana pengalaman Anda dengan produk yang telah diterima? Berikan ulasan untuk membantu pembeli lain!</p>
+
+                        @foreach($order->orderItems as $item)
+                            @php
+                                // Check if user already reviewed this product for this order
+                                $existingReview = \App\Models\Review::where([
+                                    'user_id' => Auth::id(),
+                                    'product_id' => $item->product_id,
+                                    'order_id' => $order->id,
+                                ])->first();
+                            @endphp
+
+                            <div class="border rounded p-3 mb-3 {{ $existingReview ? 'bg-light' : '' }}">
+                                <div class="d-flex align-items-center mb-3">
+                                    @if($item->product && $item->product->image)
+                                        <img src="{{ asset($item->product->image) }}" 
+                                             alt="{{ $item->product->name }}" 
+                                             class="rounded me-3" 
+                                             style="width: 60px; height: 60px; object-fit: cover;">
+                                    @endif
+                                    <div>
+                                        <h6 class="mb-0">{{ $item->product->name ?? 'Product Deleted' }}</h6>
+                                        <small class="text-muted">{{ $item->quantity }} x Rp {{ number_format($item->price, 0, ',', '.') }}</small>
+                                    </div>
+                                </div>
+
+                                @if($existingReview)
+                                    <div class="alert alert-success mb-0">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong><i class="fas fa-check-circle me-2"></i>Ulasan Anda:</strong>
+                                                <div class="mt-2">
+                                                    <div class="mb-2">
+                                                        @for($i = 1; $i <= 5; $i++)
+                                                            <i class="fas fa-star {{ $i <= $existingReview->rating ? 'text-warning' : 'text-muted' }}"></i>
+                                                        @endfor
+                                                        <span class="ms-2 text-muted">({{ $existingReview->rating }}/5)</span>
+                                                    </div>
+                                                    @if($existingReview->comment)
+                                                        <p class="mb-0 text-dark">{{ $existingReview->comment }}</p>
+                                                    @endif
+                                                    <small class="text-muted">
+                                                        <i class="far fa-clock me-1"></i>
+                                                        {{ $existingReview->created_at->format('d M Y, H:i') }}
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <form action="{{ route('reviews.store') }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="order_id" value="{{ $order->id }}">
+                                        <input type="hidden" name="product_id" value="{{ $item->product_id }}">
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Rating <span class="text-danger">*</span></label>
+                                            <div class="star-rating" data-product-id="{{ $item->product_id }}">
+                                                @for($i = 1; $i <= 5; $i++)
+                                                    <i class="far fa-star star-icon" data-rating="{{ $i }}" style="font-size: 24px; cursor: pointer; color: #ffc107;"></i>
+                                                @endfor
+                                            </div>
+                                            <input type="hidden" name="rating" id="rating-{{ $item->product_id }}" required>
+                                            @error('rating')
+                                                <div class="text-danger small mt-1">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Komentar (Opsional)</label>
+                                            <textarea class="form-control @error('comment') is-invalid @enderror" 
+                                                      name="comment" 
+                                                      rows="3" 
+                                                      placeholder="Ceritakan pengalaman Anda dengan produk ini..."></textarea>
+                                            @error('comment')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-paper-plane me-2"></i>Kirim Ulasan
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
                 {{-- Action Buttons --}}
+                <div class="text-center mb-3">
+                    <a href="{{ route('orders.track', $order->id) }}" class="btn btn-primary btn-lg px-5">
+                        <i class="fas fa-map-marked-alt me-2"></i>Lacak Pesanan
+                    </a>
+                </div>
+
                 @if($order->payment_status === 'pending' && $order->payment_method !== 'cod')
                     <div class="text-center">
                         <form action="{{ route('orders.confirmPayment', $order->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin sudah melakukan pembayaran?')">
@@ -289,5 +406,64 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Star Rating Functionality
+        document.querySelectorAll('.star-rating').forEach(function(ratingContainer) {
+            const stars = ratingContainer.querySelectorAll('.star-icon');
+            const productId = ratingContainer.getAttribute('data-product-id');
+            const ratingInput = document.getElementById('rating-' + productId);
+            
+            stars.forEach(function(star, index) {
+                // Hover effect
+                star.addEventListener('mouseenter', function() {
+                    highlightStars(stars, index);
+                });
+                
+                // Click to select rating
+                star.addEventListener('click', function() {
+                    const rating = star.getAttribute('data-rating');
+                    ratingInput.value = rating;
+                    stars.forEach(function(s, i) {
+                        if (i < rating) {
+                            s.classList.remove('far');
+                            s.classList.add('fas');
+                        } else {
+                            s.classList.remove('fas');
+                            s.classList.add('far');
+                        }
+                    });
+                });
+            });
+            
+            // Reset on mouse leave
+            ratingContainer.addEventListener('mouseleave', function() {
+                const currentRating = ratingInput.value;
+                if (currentRating) {
+                    highlightStars(stars, currentRating - 1);
+                } else {
+                    resetStars(stars);
+                }
+            });
+        });
+        
+        function highlightStars(stars, upToIndex) {
+            stars.forEach(function(star, index) {
+                if (index <= upToIndex) {
+                    star.classList.remove('far');
+                    star.classList.add('fas');
+                } else {
+                    star.classList.remove('fas');
+                    star.classList.add('far');
+                }
+            });
+        }
+        
+        function resetStars(stars) {
+            stars.forEach(function(star) {
+                star.classList.remove('fas');
+                star.classList.add('far');
+            });
+        }
+    </script>
 </body>
 </html>

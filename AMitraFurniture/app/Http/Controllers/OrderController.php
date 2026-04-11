@@ -51,6 +51,7 @@ class OrderController extends Controller
         $request->validate([
             'alamat' => 'required|string|max:500',
             'nomor_telepon' => 'required|string|max:20',
+            'payment_method' => 'required|in:cod,midtrans,transfer_bca,transfer_bri,transfer_mandiri',
         ]);
 
         $user = Auth::user();
@@ -77,12 +78,12 @@ class OrderController extends Controller
                 $paymentDeadline = now()->addHours(24);
             }
 
-            // Buat order utama - langsung set status berdasarkan metode pembayaran
+            // Buat order utama
             $order = Order::create([
                 'user_id' => $user->id,
                 'order_code' => $orderCode,
                 'total_price' => $totalPrice,
-                'payment_method' => $request->payment_method ?? 'cod',
+                'payment_method' => $request->payment_method,
                 'payment_status' => 'pending',
                 'payment_deadline' => $paymentDeadline,
                 'status' => 'pending',
@@ -100,14 +101,57 @@ class OrderController extends Controller
                 ]);
             }
 
+            // Generate Snap Token jika payment method adalah Midtrans
+            if ($request->payment_method === 'midtrans') {
+                try {
+                    // Prepare item details untuk Midtrans
+                    $itemDetails = [];
+                    foreach ($carts as $cart) {
+                        $itemDetails[] = [
+                            'id' => $cart->product_id,
+                            'price' => (int) $cart->product->price,
+                            'quantity' => $cart->quantity,
+                            'name' => $cart->product->name,
+                        ];
+                    }
+
+                    $params = [
+                        'transaction_details' => [
+                            'order_id' => $orderCode,
+                            'gross_amount' => (int) $totalPrice,
+                        ],
+                        'customer_details' => [
+                            'first_name' => $user->name,
+                            'email' => $user->email,
+                            'phone' => $request->nomor_telepon,
+                        ],
+                        'item_details' => $itemDetails,
+                    ];
+
+                    // Generate Snap Token
+                    $result = MidtransHelper::getSnapToken($params);
+                    $order->update(['snap_token' => $result['token']]);
+
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    Log::error('Failed to generate Midtrans token', ['error' => $e->getMessage()]);
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Gagal menghubungi payment gateway: ' . $e->getMessage());
+                }
+            }
+
             // Hapus cart setelah order dibuat
             Cart::where('user_id', $user->id)->delete();
 
             DB::commit();
 
-            // Redirect ke halaman order detail dengan pesan sukses
-            return redirect()->route('orders.show', $order->id)
-                ->with('success', 'Pesanan berhasil dibuat! Silakan lakukan pembayaran.');
+            // Redirect berdasarkan payment method
+            if ($request->payment_method === 'midtrans') {
+                return redirect()->route('payment.page', $order->id);
+            } else {
+                return redirect()->route('orders.show', $order->id)
+                    ->with('success', 'Pesanan berhasil dibuat! Silakan lakukan pembayaran.');
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -229,41 +273,82 @@ class OrderController extends Controller
     ============================== */
     public function callback(Request $request)
     {
-        $serverKey = config('midtrans.server_key');
-        $hashed = hash("sha512", $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
+        try {
+            $serverKey = config('midtrans.server_key');
+            $hashed = hash("sha512", $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
 
-        if ($hashed !== $request->signature_key) {
-            return response()->json(['message' => 'Invalid signature'], 403);
-        }
-
-        $order = Order::where('order_code', $request->order_id)->first();
-
-        if (!$order) {
-            return response()->json(['message' => 'Order not found'], 404);
-        }
-
-        $transactionStatus = $request->transaction_status;
-        $fraudStatus = $request->fraud_status ?? null;
-
-        if ($transactionStatus == 'capture') {
-            if ($fraudStatus == 'challenge') {
-                $order->update(['payment_status' => 'pending', 'status' => 'pending']);
-            } else if ($fraudStatus == 'accept') {
-                $order->update(['payment_status' => 'paid', 'status' => 'processing']);
+            // Verify signature
+            if ($hashed !== $request->signature_key) {
+                Log::warning('Invalid Midtrans signature', [
+                    'order_id' => $request->order_id,
+                    'expected' => $hashed,
+                    'received' => $request->signature_key
+                ]);
+                return response()->json(['message' => 'Invalid signature'], 403);
             }
-        } else if ($transactionStatus == 'settlement') {
-            $order->update(['payment_status' => 'paid', 'status' => 'processing']);
-        } else if ($transactionStatus == 'pending') {
-            $order->update(['payment_status' => 'pending', 'status' => 'pending']);
-        } else if ($transactionStatus == 'deny') {
-            $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
-        } else if ($transactionStatus == 'expire') {
-            $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
-        } else if ($transactionStatus == 'cancel') {
-            $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
+
+            $order = Order::where('order_code', $request->order_id)->first();
+
+            if (!$order) {
+                Log::warning('Order not found in callback', ['order_code' => $request->order_id]);
+                return response()->json(['message' => 'Order not found'], 404);
+            }
+
+            $transactionStatus = $request->transaction_status;
+            $fraudStatus = $request->fraud_status ?? null;
+
+            Log::info('Midtrans callback received', [
+                'order_code' => $request->order_id,
+                'transaction_status' => $transactionStatus,
+                'fraud_status' => $fraudStatus,
+            ]);
+
+            // Update order status based on transaction status
+            if ($transactionStatus == 'capture') {
+                if ($fraudStatus == 'challenge') {
+                    $order->update(['payment_status' => 'pending', 'status' => 'pending']);
+                } else if ($fraudStatus == 'accept') {
+                    $order->update(['payment_status' => 'paid', 'status' => 'processing']);
+                }
+            } else if ($transactionStatus == 'settlement') {
+                $order->update(['payment_status' => 'paid', 'status' => 'processing']);
+            } else if ($transactionStatus == 'pending') {
+                $order->update(['payment_status' => 'pending', 'status' => 'pending']);
+            } else if ($transactionStatus == 'deny') {
+                $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
+            } else if ($transactionStatus == 'expire') {
+                $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
+            } else if ($transactionStatus == 'cancel') {
+                $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
+            }
+
+            return response()->json(['status' => 'success']);
+
+        } catch (\Exception $e) {
+            Log::error('Midtrans callback error', [
+                'error' => $e->getMessage(),
+                'order_id' => $request->order_id ?? null
+            ]);
+            return response()->json(['message' => 'Internal server error'], 500);
+        }
+    }
+
+    /* ==============================
+       FINISH PAYMENT (Redirect dari Midtrans)
+    ============================== */
+    public function finishPayment(Request $request, $orderId)
+    {
+        $order = Order::findOrFail($orderId);
+
+        // Pastikan order milik user yang sedang login
+        if ($order->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized access');
         }
 
-        return response()->json(['status' => 'success']);
+        // Cek status pembayaran dari Midtrans
+        // Biasanya callback sudah update status, tapi kita cek ulang untuk keamanan
+        
+        return redirect()->route('payment.success', $order->id);
     }
 
     /* ==============================
@@ -291,7 +376,7 @@ class OrderController extends Controller
             'quantity' => 'required|integer|min:1',
             'alamat' => 'required|string|max:500',
             'nomor_telepon' => 'required|string|max:20',
-            'payment_method' => 'required|in:cod,transfer_bca,transfer_bri,transfer_mandiri',
+            'payment_method' => 'required|in:cod,midtrans,transfer_bca,transfer_bri,transfer_mandiri',
         ]);
 
         $user = Auth::user();
@@ -335,14 +420,50 @@ class OrderController extends Controller
                 'price' => $product->price,
             ]);
 
-            // Stok tidak dikurangi otomatis saat order dibuat
-            // $product->decrement('stock', $request->quantity);
+            // Generate Snap Token jika payment method adalah Midtrans
+            if ($request->payment_method === 'midtrans') {
+                try {
+                    $params = [
+                        'transaction_details' => [
+                            'order_id' => $orderCode,
+                            'gross_amount' => (int) $totalPrice,
+                        ],
+                        'customer_details' => [
+                            'first_name' => $user->name,
+                            'email' => $user->email,
+                            'phone' => $request->nomor_telepon,
+                        ],
+                        'item_details' => [
+                            [
+                                'id' => $product->id,
+                                'price' => (int) $product->price,
+                                'quantity' => $request->quantity,
+                                'name' => $product->name,
+                            ]
+                        ],
+                    ];
+
+                    // Generate Snap Token
+                    $result = MidtransHelper::getSnapToken($params);
+                    $order->update(['snap_token' => $result['token']]);
+
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    Log::error('Failed to generate Midtrans token', ['error' => $e->getMessage()]);
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Gagal menghubungi payment gateway: ' . $e->getMessage());
+                }
+            }
 
             DB::commit();
 
-            // Redirect ke detail pesanan dengan pesan sukses
-            return redirect()->route('orders.show', $order->id)
-                ->with('success', 'Pesanan berhasil dibuat! Silakan lakukan pembayaran sesuai metode yang dipilih.');
+            // Redirect berdasarkan payment method
+            if ($request->payment_method === 'midtrans') {
+                return redirect()->route('payment.page', $order->id);
+            } else {
+                return redirect()->route('orders.show', $order->id)
+                    ->with('success', 'Pesanan berhasil dibuat! Silakan lakukan pembayaran sesuai metode yang dipilih.');
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -424,5 +545,19 @@ class OrderController extends Controller
         $statuses = ['pending', 'paid', 'failed', 'expired'];
         
         return view('dashboard.order-filter', compact('orders', 'status', 'statuses'));
+    }
+
+    /**
+     * Track order - Show order tracking page with timeline
+     */
+    public function track(Order $order)
+    {
+        // Pastikan order milik user yang sedang login
+        if ($order->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized access');
+        }
+
+        $order->load('orderItems.product', 'user');
+        return view('dashboard.order-tracking', compact('order'));
     }
 }

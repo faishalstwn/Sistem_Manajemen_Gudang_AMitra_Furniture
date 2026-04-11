@@ -57,9 +57,79 @@
                         <span class="badge bg-secondary">{{ $product->category }}</span>
                     </div>
                     @endif
+
+                    <!-- Rating Summary -->
+                    @if($totalReviews > 0)
+                    <div class="rating-summary mb-3 p-3 bg-light rounded">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <h3 class="mb-0 text-warning">
+                                    <i class="fas fa-star"></i> {{ number_format($averageRating, 1) }}
+                                </h3>
+                            </div>
+                            <div>
+                                <div class="text-warning mb-1">
+                                    @for($i = 1; $i <= 5; $i++)
+                                        @if($i <= round($averageRating))
+                                            <i class="fas fa-star"></i>
+                                        @else
+                                            <i class="far fa-star"></i>
+                                        @endif
+                                    @endfor
+                                </div>
+                                <small class="text-muted">{{ $totalReviews }} ulasan</small>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
                 </div>
             </div>
         </div>
+
+        <!-- Reviews Section -->
+        @if($totalReviews > 0)
+        <div class="container mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="fas fa-comments me-2"></i>Ulasan Pembeli ({{ $totalReviews }})</h5>
+                </div>
+                <div class="card-body">
+                    @foreach($reviews as $review)
+                    <div class="review-item mb-4 pb-4 border-bottom">
+                        <div class="d-flex align-items-start">
+                            <div class="me-3">
+                                <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center" 
+                                     style="width: 40px; height: 40px;">
+                                    <i class="fas fa-user text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="mb-1">{{ $review->user->name }}</h6>
+                                        <div class="text-warning mb-1">
+                                            @for($i = 1; $i <= 5; $i++)
+                                                <i class="fas fa-star {{ $i <= $review->rating ? '' : 'text-muted' }}"></i>
+                                            @endfor
+                                            <span class="text-muted small ms-2">({{ $review->rating }}/5)</span>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">
+                                        <i class="far fa-clock me-1"></i>
+                                        {{ $review->created_at->diffForHumans() }}
+                                    </small>
+                                </div>
+                                @if($review->comment)
+                                <p class="mb-0 text-dark">{{ $review->comment }}</p>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+        @endif
 
         <!-- Related Products Section -->
         @if($relatedProducts->count() > 0)

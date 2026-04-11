@@ -1,6 +1,63 @@
 @extends('admin.layout.app')
 
 @section('content')
+<style>
+    /* Custom pagination styles for barang-keluar page */
+    .pagination {
+        margin-bottom: 0;
+        gap: 0.5rem;
+        display: flex;
+        flex-wrap: wrap;
+    }
+    
+    .pagination .page-item {
+        margin: 0 2px;
+    }
+    
+    .pagination .page-link {
+        padding: 0.5rem 0.85rem;
+        font-size: 0.875rem;
+        border-radius: 0.375rem;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        min-width: 40px;
+        text-align: center;
+        transition: all 0.2s ease;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
+    }
+    
+    .pagination .page-link:hover:not(.disabled) {
+        background-color: #e9ecef;
+        color: #0d6efd;
+        border-color: #0d6efd;
+        text-decoration: none;
+    }
+    
+    .pagination .page-item.disabled .page-link {
+        color: #adb5bd;
+        pointer-events: none;
+        background-color: #f8f9fa;
+        border-color: #dee2e6;
+        cursor: not-allowed;
+    }
+    
+    /* Responsive pagination */
+    @media (max-width: 576px) {
+        .pagination .page-link {
+            padding: 0.4rem 0.65rem;
+            font-size: 0.8rem;
+            min-width: 35px;
+        }
+    }
+</style>
+
 <div class="container-fluid">
 
     {{-- Header --}}
@@ -161,11 +218,15 @@
             </div>
         </div>
         @if($barangKeluar->hasPages())
-        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
-            <small class="text-muted">
-                Menampilkan {{ $barangKeluar->firstItem() }}–{{ $barangKeluar->lastItem() }} dari {{ $barangKeluar->total() }}
-            </small>
-            {{ $barangKeluar->links('pagination::bootstrap-5') }}
+        <div class="card-footer bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="text-muted small">
+                    Menampilkan <strong>{{ $barangKeluar->firstItem() }}</strong> - <strong>{{ $barangKeluar->lastItem() }}</strong> dari <strong>{{ $barangKeluar->total() }}</strong> transaksi
+                </div>
+                <nav aria-label="Page navigation">
+                    {{ $barangKeluar->links('pagination::bootstrap-5') }}
+                </nav>
+            </div>
         </div>
         @endif
     </div>

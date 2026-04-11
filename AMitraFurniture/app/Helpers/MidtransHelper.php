@@ -65,17 +65,9 @@ class MidtransHelper
     {
         $serverKey = Config::$serverKey;
         
-        // DEVELOPMENT MODE: Jika credentials tidak valid, gunakan mock token
-        if (!str_starts_with($serverKey, 'SB-') && !Config::$isProduction) {
-            \Log::warning('Using MOCK Midtrans token - Production credentials detected in Sandbox mode');
-            
-            // Generate mock token untuk development
-            $mockToken = 'MOCK-' . uniqid() . '-' . time();
-            
-            return [
-                'token' => $mockToken,
-                'redirect_url' => '#'
-            ];
+        // Validasi server key tidak kosong
+        if (empty($serverKey)) {
+            throw new \Exception('Midtrans Server Key tidak ditemukan. Silakan setup di file .env');
         }
         
         $url = Config::getSnapBaseUrl() . '/transactions';

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property float $total_price
  * @property string|null $payment_method
  * @property string $payment_status
+ * @property \Illuminate\Support\Carbon|null $payment_deadline
  * @property string $status
  * @property string|null $snap_token
  * @property string|null $alamat
@@ -33,10 +34,25 @@ class Order extends Model
         'total_price',
         'payment_method',
         'payment_status',
+        'payment_deadline',
         'status',
         'snap_token',
         'alamat',
         'nomor_telepon',
+        'tracking_number',
+        'confirmed_at',
+        'shipped_at',
+        'delivered_at',
+        'estimated_delivery',
+        'tracking_notes',
+    ];
+
+    protected $casts = [
+        'payment_deadline' => 'datetime',
+        'confirmed_at' => 'datetime',
+        'shipped_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'estimated_delivery' => 'date',
     ];
 
     public function user()
