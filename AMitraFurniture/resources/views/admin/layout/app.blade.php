@@ -16,6 +16,7 @@
             min-height: 100vh;
             background: #ffffff;
             border-right: 1px solid #ddd;
+            padding: 16px 12px 16px 12px;
         }
         .sidebar a {
             display: block;

@@ -183,7 +183,16 @@
                                                         <i class="fas {{ $icon }} me-1"></i>
                                                         <strong>{{ $cell->kode }}</strong>
                                                     </div>
-                                                    <div style="font-size:11px;">{{ $cell->zona }}</div>
+                                                    <div style="font-size:11px;">
+                                                        @php
+                                                            $kategoris = $cell->products->pluck('category')->unique()->filter()->values();
+                                                        @endphp
+                                                        @if($kategoris->isNotEmpty())
+                                                            {{ $kategoris->implode(', ') }}
+                                                        @else
+                                                            <span class="text-muted">Belum ada produk</span>
+                                                        @endif
+                                                    </div>
                                                     <div class="mt-1" style="font-size:11px;">
                                                         {{ $terisi }}/{{ $cell->kapasitas }} unit
                                                     </div>

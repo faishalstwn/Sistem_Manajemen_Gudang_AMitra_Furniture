@@ -1,5 +1,13 @@
 <div class="sidebar">
-    <h6 class="mb-4 fw-bold">Dashboard Owner</h6>
+    {{-- Logo pojok kiri atas --}}
+    <div class="d-flex align-items-center gap-2 mb-4">
+        <img src="{{ asset('assets/images/logo-mitra.png') }}"
+             alt="Logo Mitra"
+             style="width:48px; height:48px; object-fit:contain; border-radius:8px;">
+        <span class="fw-bold" style="font-size:14px; line-height:1.2;">
+            AMitra<br><small class="text-muted fw-normal" style="font-size:11px;">Furniture</small>
+        </span>
+    </div>
 
     <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
         <i class="fas fa-chart-line me-2"></i>Ringkasan
@@ -35,6 +43,12 @@
     </a>
     <a href="{{ route('admin.lokasi-gudang.peta') }}" class="{{ request()->routeIs('admin.lokasi-gudang.*') ? 'active' : '' }}">
         <i class="fas fa-map-marked-alt me-2 text-info"></i>Peta Gudang
+    </a>
+    <a href="{{ route('admin.stock-opname.index') }}" class="{{ request()->routeIs('admin.stock-opname.*') ? 'active' : '' }}">
+        <i class="fas fa-clipboard-check me-2 text-warning"></i>Stock Opname
+    </a>
+    <a href="{{ route('admin.laporan-gudang.index') }}" class="{{ request()->routeIs('admin.laporan-gudang.*') ? 'active' : '' }}">
+        <i class="fas fa-chart-pie me-2 text-primary"></i>Laporan Gudang
     </a>
 
     <hr>
