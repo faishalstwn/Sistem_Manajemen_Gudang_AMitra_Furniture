@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class AdminOrderController extends Controller
 {
@@ -13,28 +14,52 @@ class AdminOrderController extends Controller
     public function index()
     {
         $orders = Order::with(['user', 'orderItems.product'])->latest()->paginate(15);
-        return view('admin.pesanan', compact('orders'));
+        return Inertia::render('Admin/Pesanan/Index', ['orders' => $orders]);
     }
 
-    /**
-     * Show form to edit order status
-     */
+    
     public function edit(Order $order)
     {
-        return view('admin.pesanan-edit', compact('order'));
+        $order->load('user', 'orderItems.product');
+        return Inertia::render('Admin/Pesanan/Edit', ['order' => $order]);
     }
 
-    /**
-     * Update order status
-     */
+    
     public function update(Request $request, Order $order)
     {
-
         $validated = $request->validate([
             'status' => 'required|in:pending,processing,shipped,delivered,cancelled',
             'payment_status' => 'required|in:pending,paid,failed',
         ]);
 
+        $order->load('orderItems.product');
+
+        $newStatus = $validated['status'];
+        $oldStatus = $order->status;
+
+        
+        $isShippingNow = in_array($newStatus, ['shipped', 'delivered']) && !in_array($oldStatus, ['shipped', 'delivered']);
+
+        if ($isShippingNow) {
+           
+            foreach ($order->orderItems as $item) {
+                if ($item->quantity > $item->product->stock) {
+                    return redirect()->back()
+                        ->with('error', "Stok produk '{$item->product->name}' tidak mencukupi. Sisa: {$item->product->stock}, Butuh: {$item->quantity}");
+                }
+            }
+
+          
+            $stockService = app(\App\Services\StockMovementService::class);
+            foreach ($order->orderItems as $item) {
+                $stockService->recordStockOut(
+                    $item->product_id,
+                    $item->quantity,
+                    $order->order_code,
+                    "Penjualan dari Pesanan {$order->order_code}"
+                );
+            }
+        }
 
         $order->update([
             'status' => $validated['status'],
@@ -45,9 +70,7 @@ class AdminOrderController extends Controller
             ->with('success', 'Status pesanan berhasil diperbarui');
     }
 
-    /**
-     * Display shipping overview
-     */
+   
     public function shipping()
     {
         $waitingShipment = Order::where('status', 'processing')
@@ -64,6 +87,11 @@ class AdminOrderController extends Controller
             ->take(10)
             ->get();
         
-        return view('admin.pengiriman', compact('waitingShipment', 'shipping', 'delivered', 'recentOrders'));
+        return Inertia::render('Admin/Pengiriman', [
+            'waitingShipment' => $waitingShipment,
+            'shipping' => $shipping,
+            'delivered' => $delivered,
+            'recentOrders' => $recentOrders,
+        ]);
     }
 }

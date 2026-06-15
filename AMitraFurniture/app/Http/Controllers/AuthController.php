@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use Laravel\Socialite\Facades\Socialite;
+use Inertia\Inertia;
 use Exception;
 
 class AuthController extends Controller
@@ -17,11 +18,11 @@ class AuthController extends Controller
     {
         // ADMIN LOGIN
         if (request()->is('admin/*')) {
-            return view('admin.login');
+            return Inertia::render('Auth/Login', ['isAdmin' => true]);
         }
 
         // USER LOGIN
-        return view('dashboard.login');
+        return Inertia::render('Auth/Login');
     }
 
     
@@ -66,11 +67,11 @@ class AuthController extends Controller
     {
         // ADMIN REGISTER
         if (request()->is('admin/*')) {
-            return view('admin.register');
+            return Inertia::render('Auth/Register', ['isAdmin' => true]);
         }
 
         // USER REGISTER
-        return view('dashboard.register');
+        return Inertia::render('Auth/Register');
     }
 
     public function register(Request $request)

@@ -7,6 +7,7 @@ use App\Models\WarehouseLocation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class AdminLokasiGudangController extends Controller
 {
@@ -32,12 +33,13 @@ class AdminLokasiGudangController extends Controller
             'total_lokasi'  => $locations->count(),
             'total_terisi'  => $locations->filter(fn($l) => $l->totalTerisi() > 0)->count(),
             'total_kosong'  => $locations->filter(fn($l) => $l->totalTerisi() === 0)->count(),
-            'total_penuh'   => $locations->filter(fn($l) => $l->sisaKapasitas() === 0 && $l->kapasitas > 0)->count(),
+            'total_penuh'   => $locations->filter(fn($l) => $l->persentaseTerisi() >= 90)->count(),
         ];
 
-        return view('admin.lokasi-gudang.peta', compact(
-            'locations', 'grid', 'maxBaris', 'maxKolom', 'zonaList', 'stats'
-        ));
+        return Inertia::render('Admin/LokasiGudang/Peta', [
+            'locations' => $locations, 'grid' => $grid, 'maxBaris' => $maxBaris,
+            'maxKolom' => $maxKolom, 'zonaList' => $zonaList, 'stats' => $stats,
+        ]);
     }
 
     public function index(Request $request)
@@ -64,14 +66,14 @@ class AdminLokasiGudangController extends Controller
 
         $zonaList = WarehouseLocation::distinct()->pluck('zona')->sort();
 
-        return view('admin.lokasi-gudang.index', compact('locations', 'zonaList'));
+        return Inertia::render('Admin/LokasiGudang/Index', ['locations' => $locations, 'zonaList' => $zonaList]);
     }
 
    
     public function create()
     {
         $zonaList = WarehouseLocation::distinct()->pluck('zona')->sort();
-        return view('admin.lokasi-gudang.create', compact('zonaList'));
+        return Inertia::render('Admin/LokasiGudang/Create', ['zonaList' => $zonaList]);
     }
 
    
@@ -111,14 +113,14 @@ class AdminLokasiGudangController extends Controller
             ->whereNotIn('id', $location->products->pluck('id'))
             ->orderBy('name')->get();
 
-        return view('admin.lokasi-gudang.show', compact('location', 'availableProducts'));
+        return Inertia::render('Admin/LokasiGudang/Show', ['location' => $location, 'availableProducts' => $availableProducts]);
     }
 
   
     public function edit(WarehouseLocation $location)
     {
         $zonaList = WarehouseLocation::distinct()->pluck('zona')->sort();
-        return view('admin.lokasi-gudang.edit', compact('location', 'zonaList'));
+        return Inertia::render('Admin/LokasiGudang/Edit', ['location' => $location, 'zonaList' => $zonaList]);
     }
 
 

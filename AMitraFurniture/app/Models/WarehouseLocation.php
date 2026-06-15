@@ -22,6 +22,18 @@ class WarehouseLocation extends Model
         'kapasitas' => 'integer',
     ];
 
+    protected $appends = ['total_terisi', 'sisa_kapasitas'];
+
+    public function getTotalTerisiAttribute()
+    {
+        return $this->totalTerisi();
+    }
+
+    public function getSisaKapasitasAttribute()
+    {
+        return $this->sisaKapasitas();
+    }
+
     public function products()
     {
         return $this->belongsToMany(Product::class, 'location_product')

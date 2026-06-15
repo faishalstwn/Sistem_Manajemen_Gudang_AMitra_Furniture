@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Product;
+use Inertia\Inertia;
 
 class HomeController extends Controller
 {
@@ -34,7 +35,10 @@ class HomeController extends Controller
         // Append query parameters ke pagination links
         $products->appends($request->all());
 
-        return view('dashboard.home', compact('products'));
+        return Inertia::render('Home', [
+            'products' => $products,
+            'filters' => $request->only(['search', 'category']),
+        ]);
     }
 
    
@@ -53,6 +57,9 @@ class HomeController extends Controller
                           ->orderBy('created_at', 'desc')
                           ->paginate(12);
 
-        return view('dashboard.category', compact('products', 'category'));
+        return Inertia::render('Category', [
+            'products' => $products,
+            'category' => $category,
+        ]);
     }
 }

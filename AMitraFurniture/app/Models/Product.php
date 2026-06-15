@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Product extends Model
@@ -14,86 +16,87 @@ class Product extends Model
         'price',
         'category',
         'stock',
-        'image'
+        'image',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
-        'stock' => 'integer'
+        'stock' => 'integer',
     ];
 
-    // Auto-generate slug from name
-    protected static function boot()
+    protected static function boot(): void
     {
         parent::boot();
 
-        static::creating(function ($product) {
+        static::creating(function (Product $product): void {
             if (empty($product->slug)) {
-                $product->slug = Str::slug($product->name);
-                
-                // Ensure slug is unique
-                $originalSlug = $product->slug;
-                $count = 1;
-                while (static::where('slug', $product->slug)->exists()) {
-                    $product->slug = $originalSlug . '-' . $count;
-                    $count++;
-                }
+                $product->slug = static::generateUniqueSlug($product->name);
             }
         });
 
-        static::updating(function ($product) {
+        static::updating(function (Product $product): void {
             if ($product->isDirty('name') && empty($product->slug)) {
-                $product->slug = Str::slug($product->name);
-                
-                // Ensure slug is unique
-                $originalSlug = $product->slug;
-                $count = 1;
-                while (static::where('slug', $product->slug)->where('id', '!=', $product->id)->exists()) {
-                    $product->slug = $originalSlug . '-' . $count;
-                    $count++;
-                }
+                $product->slug = static::generateUniqueSlug($product->name, $product->id);
             }
         });
     }
 
-    public function orders()
+    protected static function generateUniqueSlug(string $name, ?int $ignoreId = null): string
+    {
+        $slug = Str::slug($name);
+        $originalSlug = $slug;
+        $count = 1;
+
+        while (
+            static::where('slug', $slug)
+                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $originalSlug . '-' . $count;
+            $count++;
+        }
+
+        return $slug;
+    }
+
+    public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
     }
 
-    public function stockMovements()
+    public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class)->latest();
     }
 
-    public function barangMasuk()
+    public function barangMasuk(): HasMany
     {
         return $this->hasMany(BarangMasuk::class, 'produk_id');
     }
 
-    public function barangKeluar()
+    public function barangKeluar(): HasMany
     {
         return $this->hasMany(BarangKeluar::class, 'produk_id');
     }
 
-    public function reviews()
+    public function reviews(): HasMany
     {
         return $this->hasMany(Review::class)->latest();
     }
 
-    public function locations()
+    public function locations(): BelongsToMany
     {
         return $this->belongsToMany(WarehouseLocation::class, 'location_product')
-                    ->withPivot('jumlah')
-                    ->withTimestamps();
+            ->withPivot('jumlah')
+            ->withTimestamps();
     }
 
-    public function averageRating()
+    public function averageRating(): float
     {
-        return $this->reviews()->avg('rating');
+        return (float) ($this->reviews()->avg('rating') ?? 0);
     }
 
-    public function reviewsCount()
+    public function reviewsCount(): int
     {
         return $this->reviews()->count();
     }

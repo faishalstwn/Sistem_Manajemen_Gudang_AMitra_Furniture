@@ -12,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            \App\Http\Middleware\HandleInertiaRequests::class,
+        ]);
+
         $middleware->alias([
             'admin'     => \App\Http\Middleware\AdminMiddleware::class,
             'wms.token' => \App\Http\Middleware\WmsTokenMiddleware::class,
@@ -20,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Izinkan request OPTIONS (preflight CORS) dari WMS React
         $middleware->validateCsrfTokens(except: [
             'api/*',
+            'payment/callback',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

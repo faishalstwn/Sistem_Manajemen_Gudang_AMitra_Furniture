@@ -2,106 +2,153 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BarangKeluar;
-use App\Models\Product;
 use App\Models\StockMovement;
+use App\Services\ProductService;
+use App\Services\StockMovementService;
+use App\Http\Requests\RecordStockMovementRequest;
+use App\Exceptions\ProductNotFoundException;
+use App\Exceptions\InsufficientStockException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class AdminBarangKeluarController extends Controller
 {
+    protected StockMovementService $stockService;
+    protected ProductService $productService;
+
+    public function __construct(StockMovementService $stockService, ProductService $productService)
+    {
+        $this->stockService = $stockService;
+        $this->productService = $productService;
+    }
+
     /**
-     * Riwayat barang keluar
+     * Display history of barang keluar (stock out)
      */
     public function index(Request $request)
     {
-        $query = BarangKeluar::with('produk');
+        $barangKeluar = $this->stockService->getAllMovements([
+            'product_id' => $request->produk_id,
+            'type' => 'out',
+            'date_from' => $request->dari,
+            'date_to' => $request->sampai,
+            'per_page' => 20,
+        ]);
 
-        if ($request->filled('produk_id')) {
-            $query->where('produk_id', $request->produk_id);
-        }
+        $productList = $this->productService->getAllProducts([
+            'per_page' => 999,
+        ]);
 
-        if ($request->filled('tujuan')) {
-            $query->where('tujuan', 'like', '%' . $request->tujuan . '%');
-        }
+        $products = collect($productList->items())->pluck('name', 'id');
 
-        if ($request->filled('dari')) {
-            $query->whereDate('tanggal_keluar', '>=', $request->dari);
-        }
+        $query = StockMovement::with('product')
+            ->where('type', 'out')
+            ->when($request->filled('produk_id'), function ($q) use ($request) {
+                $q->where('product_id', $request->produk_id);
+            })
+            ->when($request->filled('dari'), function ($q) use ($request) {
+                $q->whereDate('created_at', '>=', $request->dari);
+            })
+            ->when($request->filled('sampai'), function ($q) use ($request) {
+                $q->whereDate('created_at', '<=', $request->sampai);
+            });
 
-        if ($request->filled('sampai')) {
-            $query->whereDate('tanggal_keluar', '<=', $request->sampai);
-        }
+        $totalJumlah = (clone $query)->sum('quantity');
+        $totalHariIni = (clone $query)->whereDate('created_at', today())->sum('quantity');
 
-        $barangKeluar = $query->latest()->paginate(20)->withQueryString();
-        $products     = Product::orderBy('name')->pluck('name', 'id');
-
-        $totalJumlah  = BarangKeluar::sum('jumlah');
-        $totalHariIni = BarangKeluar::whereDate('tanggal_keluar', today())->sum('jumlah');
-
-        return view('admin.barang-keluar.index', compact(
-            'barangKeluar', 'products', 'totalJumlah', 'totalHariIni'
-        ));
+        return Inertia::render('Admin/BarangKeluar/Index', [
+            'barangKeluar' => $barangKeluar,
+            'products' => $products,
+            'totalJumlah' => $totalJumlah,
+            'totalHariIni' => $totalHariIni,
+        ]);
     }
 
     /**
-     * Form tambah barang keluar
+     * Show form untuk recording barang keluar
      */
     public function create()
     {
-        $products = Product::where('stock', '>', 0)->orderBy('name')->get();
-        return view('admin.barang-keluar.create', compact('products'));
+        $products = $this->productService->getAllProducts([
+            'per_page' => 999,
+        ])->items();
+
+        $productsWithStock = collect($products)->filter(fn($p) => $p->stock > 0);
+
+        return Inertia::render('Admin/BarangKeluar/Create', ['productsWithStock' => $productsWithStock]);
     }
 
     /**
-     * Simpan barang keluar & kurangi stok produk
+     * Store barang keluar record dengan automatic stock decrement dan validation
      */
-    public function store(Request $request)
+    public function store(RecordStockMovementRequest $request)
     {
-        // Validasi awal tanpa max stok (butuh product_id dulu)
-        $request->validate([
-            'produk_id'      => 'required|exists:products,id',
-            'jumlah'         => 'required|integer|min:1',
-            'tujuan'         => 'nullable|string|max:255',
-            'tanggal_keluar' => 'required|date',
-            'catatan'        => 'nullable|string|max:500',
-        ]);
+        try {
+            $validated = $request->validated();
+            $validated['type'] = 'out';
 
-        $product = Product::findOrFail($request->produk_id);
+            $this->productService->checkStockAvailability(
+                $validated['product_id'],
+                $validated['quantity']
+            );
 
-        // Validasi stok mencukupi
-        if ($request->jumlah > $product->stock) {
-            return back()->withInput()
-                ->withErrors(['jumlah' => "Stok produk '{$product->name}' hanya tersisa {$product->stock} unit."]);
+            $this->stockService->recordStockOut(
+                productId: $validated['product_id'],
+                quantity: $validated['quantity'],
+                reference: $validated['reference'] ?? '',
+                notes: $validated['notes'] ?? '',
+            );
+
+            return redirect()->route('admin.barang-keluar.index')
+                ->with('success', 'Barang keluar berhasil dicatat dan stok otomatis dikurangi');
+        } catch (InsufficientStockException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['error' => $e->getMessage()]);
+        } catch (ProductNotFoundException $e) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['error' => $e->getMessage()]);
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['error' => 'Gagal mencatat barang keluar: ' . $e->getMessage()]);
         }
+    }
 
-        $validated = $request->only(['produk_id', 'jumlah', 'tujuan', 'tanggal_keluar', 'catatan']);
+    /**
+     * Show detail barang keluar
+     */
+    public function show($id)
+    {
+        try {
+            $movement = StockMovement::findOrFail($id);
+            $product = $this->productService->getProductById($movement->product_id);
 
-        DB::transaction(function () use ($validated, $product) {
-            // Simpan record barang keluar
-            BarangKeluar::create($validated);
+            return Inertia::render('Admin/BarangKeluar/Show', ['movement' => $movement, 'product' => $product]);
+        } catch (ProductNotFoundException $e) {
+            return redirect()->route('admin.barang-keluar.index')
+                ->withErrors(['error' => $e->getMessage()]);
+        }
+    }
 
-            // Kurangi stok produk
-            $previousStock = $product->stock;
-            $newStock      = $previousStock - $validated['jumlah'];
-            $product->update(['stock' => $newStock]);
+    /**
+     * Get statistics untuk barang keluar
+     */
+    public function statistics(Request $request)
+    {
+        $stats = StockMovement::where('type', 'out')
+            ->when($request->filled('dari'), fn($q) => $q->whereDate('created_at', '>=', $request->dari))
+            ->when($request->filled('sampai'), fn($q) => $q->whereDate('created_at', '<=', $request->sampai))
+            ->selectRaw('COUNT(*) as total_records')
+            ->selectRaw('SUM(quantity) as total_quantity')
+            ->selectRaw('AVG(quantity) as avg_quantity')
+            ->selectRaw('MAX(quantity) as max_quantity')
+            ->first();
 
-            // Catat di stock_movements
-            StockMovement::create([
-                'product_id'     => $product->id,
-                'user_id'        => Auth::id(),
-                'type'           => 'out',
-                'quantity'       => $validated['jumlah'],
-                'previous_stock' => $previousStock,
-                'new_stock'      => $newStock,
-                'reference'      => $validated['tujuan'] ?? null,
-                'note'           => 'Barang keluar ke: ' . ($validated['tujuan'] ?? '-') .
-                                    ($validated['catatan'] ? ' | ' . $validated['catatan'] : ''),
-            ]);
-        });
-
-        return redirect()->route('admin.barang-keluar.index')
-            ->with('success', 'Barang keluar berhasil dicatat. Stok produk otomatis dikurangi.');
+        return response()->json([
+            'status' => 'success',
+            'data' => $stats,
+        ]);
     }
 }

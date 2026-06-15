@@ -2,96 +2,137 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BarangMasuk;
-use App\Models\Product;
+use App\Exceptions\ProductNotFoundException;
+use App\Http\Requests\RecordStockMovementRequest;
 use App\Models\StockMovement;
+use App\Services\ProductService;
+use App\Services\StockMovementService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Inertia\Inertia;
 
 class AdminBarangMasukController extends Controller
 {
+    protected StockMovementService $stockService;
+    protected ProductService $productService;
+
+    public function __construct(
+        StockMovementService $stockService,
+        ProductService $productService
+    ) {
+        $this->stockService = $stockService;
+        $this->productService = $productService;
+    }
+
     /**
-     * Riwayat barang masuk
+     * Display history of barang masuk.
      */
     public function index(Request $request)
     {
-        $query = BarangMasuk::with('produk');
+        $barangMasuk = $this->stockService->getAllMovements([
+            'product_id' => $request->produk_id,
+            'type'       => 'in',
+            'date_from'  => $request->dari,
+            'date_to'    => $request->sampai,
+            'per_page'   => 20,
+        ]);
 
-        if ($request->filled('produk_id')) {
-            $query->where('produk_id', $request->produk_id);
-        }
+        $products = $this->productService->getAllProducts([
+            'per_page' => 999,
+        ])->getCollection()->pluck('name', 'id');
 
-        if ($request->filled('supplier')) {
-            $query->where('supplier', 'like', '%' . $request->supplier . '%');
-        }
+        $totalJumlah = StockMovement::where('type', 'in')->sum('quantity');
 
-        if ($request->filled('dari')) {
-            $query->whereDate('tanggal_masuk', '>=', $request->dari);
-        }
+        $totalHariIni = StockMovement::where('type', 'in')
+            ->whereDate('created_at', today())
+            ->sum('quantity');
 
-        if ($request->filled('sampai')) {
-            $query->whereDate('tanggal_masuk', '<=', $request->sampai);
-        }
-
-        $barangMasuk = $query->latest()->paginate(20)->withQueryString();
-        $products    = Product::orderBy('name')->pluck('name', 'id');
-
-        $totalJumlah = BarangMasuk::sum('jumlah');
-        $totalHariIni = BarangMasuk::whereDate('tanggal_masuk', today())->sum('jumlah');
-
-        return view('admin.barang-masuk.index', compact(
-            'barangMasuk', 'products', 'totalJumlah', 'totalHariIni'
+        return Inertia::render('Admin/BarangMasuk/Index', compact(
+            'barangMasuk',
+            'products',
+            'totalJumlah',
+            'totalHariIni'
         ));
     }
 
     /**
-     * Form tambah barang masuk
+     * Show form untuk recording barang masuk.
      */
     public function create()
     {
-        $products = Product::orderBy('name')->get();
-        return view('admin.barang-masuk.create', compact('products'));
+        $products = $this->productService->getAllProducts([
+            'per_page' => 999,
+        ])->items();
+
+        return Inertia::render('Admin/BarangMasuk/Create', ['products' => $products]);
     }
 
     /**
-     * Simpan barang masuk & update stok produk
+     * Store barang masuk record dengan automatic stock update.
      */
-    public function store(Request $request)
+    public function store(RecordStockMovementRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'produk_id'     => 'required|exists:products,id',
-            'jumlah'        => 'required|integer|min:1',
-            'tanggal_masuk' => 'required|date',
-            'supplier'      => 'nullable|string|max:255',
-            'catatan'       => 'nullable|string|max:500',
+        try {
+            $validated = $request->validated();
+
+            $this->stockService->recordStockIn(
+                productId: (int) $validated['product_id'],
+                quantity: (int) $validated['quantity'],
+                reference: $validated['reference'] ?? '',
+                notes: $validated['notes'] ?? '',
+            );
+
+            return redirect()
+                ->route('admin.barang-masuk.index')
+                ->with('success', 'Barang masuk berhasil dicatat dan stok otomatis diperbarui.');
+        } catch (ProductNotFoundException $e) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors(['error' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors(['error' => 'Gagal mencatat barang masuk: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Show detail barang masuk.
+     */
+    public function show(int $id): View|RedirectResponse
+    {
+        try {
+            $movement = StockMovement::with('product')->findOrFail($id);
+
+            return Inertia::render('Admin/BarangMasuk/Show', ['movement' => $movement]);
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('admin.barang-masuk.index')
+                ->withErrors(['error' => 'Data barang masuk tidak ditemukan.']);
+        }
+    }
+
+    /**
+     * Get statistics untuk barang masuk.
+     */
+    public function statistics(Request $request): JsonResponse
+    {
+        $stats = StockMovement::where('type', 'in')
+            ->when($request->filled('dari'), fn ($q) => $q->whereDate('created_at', '>=', $request->dari))
+            ->when($request->filled('sampai'), fn ($q) => $q->whereDate('created_at', '<=', $request->sampai))
+            ->selectRaw('COUNT(*) as total_records')
+            ->selectRaw('SUM(quantity) as total_quantity')
+            ->selectRaw('AVG(quantity) as avg_quantity')
+            ->selectRaw('MAX(quantity) as max_quantity')
+            ->first();
+
+        return response()->json([
+            'status' => 'success',
+            'data'   => $stats,
         ]);
-
-        DB::transaction(function () use ($validated) {
-            // Simpan record barang masuk
-            BarangMasuk::create($validated);
-
-            // Update stok produk
-            $product       = Product::findOrFail($validated['produk_id']);
-            $previousStock = $product->stock;
-            $newStock      = $previousStock + $validated['jumlah'];
-            $product->update(['stock' => $newStock]);
-
-            // Catat di stock_movements untuk konsistensi riwayat
-            StockMovement::create([
-                'product_id'     => $product->id,
-                'user_id'        => Auth::id(),
-                'type'           => 'in',
-                'quantity'       => $validated['jumlah'],
-                'previous_stock' => $previousStock,
-                'new_stock'      => $newStock,
-                'reference'      => $validated['supplier'] ?? null,
-                'note'           => 'Barang masuk dari supplier: ' . ($validated['supplier'] ?? '-') .
-                                    ($validated['catatan'] ? ' | ' . $validated['catatan'] : ''),
-            ]);
-        });
-
-        return redirect()->route('admin.barang-masuk.index')
-            ->with('success', 'Barang masuk berhasil dicatat. Stok produk otomatis diperbarui.');
     }
 }

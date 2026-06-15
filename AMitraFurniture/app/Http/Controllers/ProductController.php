@@ -5,19 +5,20 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class ProductController extends Controller
 {
     public function index()
     {
         $products = Product::orderBy('created_at', 'desc')->paginate(12);
-        return view('products.index', compact('products'));
+        return Inertia::render('Product/Index', ['products' => $products]);
     }
 
     public function show($slug)
     {
         $product = Product::where('slug', $slug)->firstOrFail();
-        return view('products.show', compact('product'));
+        return Inertia::render('Product/Show', ['product' => $product]);
     }
 
     /**
@@ -38,15 +39,20 @@ class ProductController extends Controller
         $averageRating = $product->reviews()->avg('rating');
         $totalReviews = $product->reviews()->count();
         
-        return view('dashboard.product-detail', compact('product', 'relatedProducts', 'reviews', 'averageRating', 'totalReviews'));
+        return Inertia::render('Product/Detail', [
+            'product' => $product,
+            'relatedProducts' => $relatedProducts,
+            'reviews' => $reviews,
+            'averageRating' => $averageRating,
+            'totalReviews' => $totalReviews,
+        ]);
     }
     
-   public function checkout($id)
-{
-    $product = Product::findOrFail($id);
-
-    return view('dashboard.checkout', compact('product'));
-}
+    public function checkout($id)
+    {
+        $product = Product::findOrFail($id);
+        return Inertia::render('Checkout/Direct', ['product' => $product]);
+    }
 
     /**
      * Search products with optional keyword
@@ -62,7 +68,10 @@ class ProductController extends Controller
             $products = Product::orderBy('created_at', 'desc')->paginate(12);
         }
         
-        return view('products.search', compact('products', 'keyword'));
+        return Inertia::render('Product/Search', [
+            'products' => $products,
+            'keyword' => $keyword,
+        ]);
     }
 
 }

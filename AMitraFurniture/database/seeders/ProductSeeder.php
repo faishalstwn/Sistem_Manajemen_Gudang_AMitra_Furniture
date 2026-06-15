@@ -89,7 +89,7 @@ class ProductSeeder extends Seeder
                 'price' => 4200000,
                 'category' => 'Sofa',
                 'stock' => 12,
-                'image' => 'assets/images/dan8.png',
+                'image' => 'assets/images/dan8.jpg',
             ],
             [
                 'name' => 'Ranjang Tingkat Kayu Modern',

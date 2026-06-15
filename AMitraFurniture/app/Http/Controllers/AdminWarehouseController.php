@@ -8,6 +8,7 @@ use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class AdminWarehouseController extends Controller
 {
@@ -57,12 +58,13 @@ class AdminWarehouseController extends Controller
             ->take(8)
             ->get();
 
-        return view('admin.gudang.index', compact(
-            'products',
-            'categories',
-            'stats',
-            'recentMovements',
-        ));
+        return Inertia::render('Admin/Gudang/Kelola', [
+            'products' => $products,
+            'categories' => $categories,
+            'stats' => $stats,
+            'recentMovements' => $recentMovements,
+            'filters' => $request->only(['status', 'kategori', 'cari']),
+        ]);
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ class AdminWarehouseController extends Controller
 
     public function stokMasukForm(Product $product)
     {
-        return view('admin.gudang.stok-masuk', compact('product'));
+        return Inertia::render('Admin/Gudang/StokMasuk', ['product' => $product]);
     }
 
     public function stokMasuk(Request $request, Product $product)
@@ -110,7 +112,7 @@ class AdminWarehouseController extends Controller
 
     public function stokKeluarForm(Product $product)
     {
-        return view('admin.gudang.stok-keluar', compact('product'));
+        return Inertia::render('Admin/Gudang/StokKeluar', ['product' => $product]);
     }
 
     public function stokKeluar(Request $request, Product $product)
@@ -149,7 +151,7 @@ class AdminWarehouseController extends Controller
 
     public function adjustmentForm(Product $product)
     {
-        return view('admin.gudang.adjustment', compact('product'));
+        return Inertia::render('Admin/Gudang/Adjustment', ['product' => $product]);
     }
 
     public function adjustment(Request $request, Product $product)
@@ -216,6 +218,10 @@ class AdminWarehouseController extends Controller
             'total_adjustment' => StockMovement::where('type', 'adjustment')->count(),
         ];
 
-        return view('admin.gudang.riwayat', compact('movements', 'products', 'summary'));
+        return Inertia::render('Admin/Gudang/Riwayat', [
+            'movements' => $movements,
+            'products' => $products,
+            'summary' => $summary,
+        ]);
     }
 }

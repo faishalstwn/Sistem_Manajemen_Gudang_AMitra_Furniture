@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Order;
 use Carbon\Carbon;
+use Inertia\Inertia;
 
 class ProfileController extends Controller
 {
@@ -45,14 +46,14 @@ class ProfileController extends Controller
             ->latest()
             ->get();
         
-        return view('dashboard.profile', compact(
-            'user', 
-            'ordersYesterday', 
-            'ordersPaid', 
-            'ordersUnpaid', 
-            'ordersProcessing', 
-            'ordersShipping'
-        ));
+        return Inertia::render('Profile/Show', [
+            'user' => $user,
+            'ordersYesterday' => $ordersYesterday,
+            'ordersPaid' => $ordersPaid,
+            'ordersUnpaid' => $ordersUnpaid,
+            'ordersProcessing' => $ordersProcessing,
+            'ordersShipping' => $ordersShipping,
+        ]);
     }
 
     public function update(Request $request)

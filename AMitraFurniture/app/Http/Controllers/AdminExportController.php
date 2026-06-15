@@ -14,9 +14,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class AdminExportController extends Controller
 {
-    // ──────────────────────────────────────────────
-    //  EXCEL
-    // ──────────────────────────────────────────────
+    
 
     public function excelStok()
     {
@@ -40,9 +38,7 @@ class AdminExportController extends Controller
         return Excel::download(new BarangKeluarExport($dari, $sampai), $filename);
     }
 
-    // ──────────────────────────────────────────────
-    //  PDF
-    // ──────────────────────────────────────────────
+   
 
     public function pdfStok()
     {
