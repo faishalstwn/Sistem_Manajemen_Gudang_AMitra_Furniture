@@ -27,9 +27,9 @@ class MidtransHelper
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $payload,
-            // Disable SSL verification for development
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            // Enable SSL verification in production
+            CURLOPT_SSL_VERIFYPEER => app()->environment('production'),
+            CURLOPT_SSL_VERIFYHOST => app()->environment('production') ? 2 : 0,
         ]);
         
         $result = curl_exec($curl);
