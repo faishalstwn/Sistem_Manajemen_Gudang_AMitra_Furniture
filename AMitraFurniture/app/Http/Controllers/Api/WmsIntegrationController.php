@@ -5,18 +5,19 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\StockMovement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class WmsIntegrationController extends Controller
 {
-    // ──────────────────────────────────────────────────────
-    // GET /api/products
-    // Kembalikan semua produk e-commerce untuk ditampilkan di WMS
-    // ──────────────────────────────────────────────────────
-    public function getProducts(): JsonResponse
-    {
-        $products = Product::select('id', 'name', 'category', 'price', 'stock', 'image', 'slug')
+   
+  public function getProducts(): JsonResponse
+{
+    $products = Cache::remember('wms_products', 60, function () {
+        return Product::select('id', 'name', 'category', 'price', 'stock', 'image', 'slug')
             ->latest()
             ->get()
             ->map(function ($p) {
@@ -30,130 +31,189 @@ class WmsIntegrationController extends Controller
                     'slug'     => $p->slug,
                 ];
             });
+    });
 
-        return response()->json([
-            'success' => true,
-            'data'    => $products,
-        ]);
-    }
-
-    // ──────────────────────────────────────────────────────
-    // PATCH /api/products/{id}/stock
-    // Update stok satu produk dari WMS
-    // Body: { "stock": 50 }
-    // ──────────────────────────────────────────────────────
+    return response()->json([
+        'success' => true,
+        'data'    => $products,
+    ]);
+}
+  
     public function updateStock(Request $request, int $id): JsonResponse
     {
         $request->validate([
             'stock' => 'required|integer|min:0',
         ]);
 
-        $product = Product::findOrFail($id);
-        $oldStock = $product->stock;
-        $product->update(['stock' => $request->stock]);
+        $result = DB::transaction(function () use ($request, $id) {
+            $product  = Product::lockForUpdate()->findOrFail($id);
+            $oldStock = $product->stock;
+            $newStock = (int) $request->stock;
+            $product->update(['stock' => $newStock]);
+
+            StockMovement::create([
+                'product_id'     => $product->id,
+                'user_id'        => null,
+                'type'           => 'adjustment',
+                'quantity'       => abs($newStock - $oldStock),
+                'previous_stock' => $oldStock,
+                'new_stock'      => $newStock,
+                'reference'      => 'WMS-API',
+                'note'           => 'Update stok via WMS Integration API',
+            ]);
+
+            return ['product' => $product->fresh(), 'oldStock' => $oldStock];
+        });
 
         return response()->json([
             'success'   => true,
-            'message'   => "Stok produk '{$product->name}' diperbarui: {$oldStock} → {$request->stock}",
+            'message'   => "Stok produk '{$result['product']->name}' diperbarui: {$result['oldStock']} → {$result['product']->stock}",
             'product'   => [
-                'id'    => $product->id,
-                'name'  => $product->name,
-                'stock' => $product->stock,
+                'id'    => $result['product']->id,
+                'name'  => $result['product']->name,
+                'stock' => $result['product']->stock,
             ],
         ]);
     }
 
-    // ──────────────────────────────────────────────────────
-    // POST /api/products/sync-stock
-    // Sinkronisasi massal stok dari WMS
-    // Body: [ { "id": 1, "stock": 10 }, { "id": 2, "stock": 5 } ]
-    // ──────────────────────────────────────────────────────
+   
     public function syncStock(Request $request): JsonResponse
-    {
-        $request->validate([
-            '*.id'    => 'required|integer|exists:products,id',
-            '*.stock' => 'required|integer|min:0',
-        ]);
+{
+    $request->validate([
+    '*.id'    => 'required|integer',
+    '*.stock' => 'required|integer|min:0',
+]);
+       $ids = collect($request->all())->pluck('id')->unique();
 
-        $updated = [];
-        $failed  = [];
+    $validIds = Product::whereIn('id', $ids)->pluck('id');
 
-        foreach ($request->all() as $item) {
-            try {
-                $product = Product::find($item['id']);
+    if ($validIds->count() !== $ids->count()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Ada ID produk yang tidak valid'
+        ], 400);
+    }
+
+    $updated = [];
+    $failed  = [];
+
+    try {
+        DB::transaction(function () use ($request, &$updated) {
+            $ids      = collect($request->all())->pluck('id');
+            $products = Product::lockForUpdate()
+                               ->whereIn('id', $ids)
+                               ->get()
+                               ->keyBy('id');
+
+            $movements = [];
+
+            foreach ($request->all() as $item) {
+                $product = $products->get($item['id']);
                 if ($product) {
-                    $product->update(['stock' => $item['stock']]);
+                    $oldStock = $product->stock;
+                    $newStock = (int) $item['stock'];
+                    $product->update(['stock' => $newStock]);
+
+                    $movements[] = [
+                        'product_id'     => $product->id,
+                        'user_id'        => null,
+                        'type'           => 'adjustment',
+                        'quantity'       => abs($newStock - $oldStock),
+                        'previous_stock' => $oldStock,
+                        'new_stock'      => $newStock,
+                        'reference'      => 'WMS-SYNC',
+                        'note'           => 'Sinkronisasi stok massal via WMS Integration API',
+                        'created_at'     => now(),
+                        'updated_at'     => now(),
+                    ];
+
                     $updated[] = [
                         'id'    => $product->id,
                         'name'  => $product->name,
-                        'stock' => $product->stock,
+                        'stock' => $newStock,
                     ];
                 }
-            } catch (\Exception $e) {
-                $failed[] = ['id' => $item['id'], 'error' => $e->getMessage()];
             }
-        }
 
-        return response()->json([
-            'success'       => true,
-            'total_updated' => count($updated),
-            'updated'       => $updated,
-            'failed'        => $failed,
-        ]);
+            StockMovement::insert($movements);
+        });
+    } catch (\Exception $e) {
+        $failed[] = ['error' => $e->getMessage()];
     }
 
-    // ──────────────────────────────────────────────────────
-    // GET /api/orders
-    // Kembalikan pesanan e-commerce untuk dilihat di WMS
-    // Query params: ?status=processing&limit=20
-    // ──────────────────────────────────────────────────────
+    return response()->json([
+        'success'       => true,
+        'total_updated' => count($updated),
+        'updated'       => $updated,
+        'failed'        => $failed,
+    ]);
+  } 
+
+  
     public function getOrders(Request $request): JsonResponse
-    {
-        $query = Order::with(['user', 'orderItems.product'])
-            ->latest();
+{
+    $limit = min((int) $request->get('limit', 20), 100);
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
+    $orders = Order::query()
+        ->with([
+            'user:id,name,email',
+            'orderItems:id,order_id,product_id,quantity,price',
+            'orderItems.product:id,name'
+        ])
+        ->when($request->status, fn ($q) => 
+            $q->where('status', $request->status)
+        )
+        ->when($request->payment_status, fn ($q) => 
+            $q->where('payment_status', $request->payment_status)
+        )
+        ->latest()
+        ->limit($limit)
+        ->get();
 
-        if ($request->has('payment_status')) {
-            $query->where('payment_status', $request->payment_status);
-        }
+    $data = $orders->map(function ($order) {
+        return [
+            'id'             => $order->id,
+            'order_code'     => $order->order_code,
 
-        $limit  = min((int) $request->get('limit', 20), 100);
-        $orders = $query->take($limit)->get()->map(function ($order) {
-            return [
-                'id'             => $order->id,
-                'order_code'     => $order->order_code,
-                'customer'       => $order->user?->name ?? 'Guest',
-                'customer_email' => $order->user?->email ?? null,
-                'total_price'    => (float) $order->total_price,
-                'status'         => $order->status,
-                'payment_status' => $order->payment_status,
-                'alamat'         => $order->alamat,
-                'nomor_telepon'  => $order->nomor_telepon,
-                'items'          => $order->orderItems->map(fn($item) => [
+            'customer' => [
+                'name'  => $order->user?->name ?? 'Guest',
+                'email' => $order->user?->email,
+            ],
+
+            'total_price'    => (float) $order->total_price,
+            'status'         => $order->status,
+            'payment_status' => $order->payment_status,
+
+            'shipping' => [
+                'address' => $order->alamat,
+                'phone'   => $order->nomor_telepon,
+            ],
+
+            'items' => $order->orderItems->map(function ($item) {
+                return [
                     'product_id'   => $item->product_id,
                     'product_name' => $item->product?->name ?? 'Produk dihapus',
                     'quantity'     => $item->quantity,
                     'price'        => (float) $item->price,
-                ]),
-                'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
-            ];
-        });
+                    'subtotal'     => (float) ($item->price * $item->quantity),
+                ];
+            }),
 
-        return response()->json([
-            'success' => true,
-            'total'   => $orders->count(),
-            'data'    => $orders,
-        ]);
-    }
+            'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
+        ];
+    });
 
-    // ──────────────────────────────────────────────────────
-    // PATCH /api/orders/{id}/status
-    // Update status order dari WMS (misal: setelah barang dikirim dari gudang)
-    // Body: { "status": "shipped", "payment_status": "paid" }
-    // ──────────────────────────────────────────────────────
+    return response()->json([
+        'success' => true,
+        'meta' => [
+            'total' => $orders->count(),
+            'limit' => $limit,
+        ],
+        'data' => $data,
+    ]);
+}
+
+   
     public function updateOrderStatus(Request $request, int $id): JsonResponse
     {
         $request->validate([
@@ -182,25 +242,48 @@ class WmsIntegrationController extends Controller
         ]);
     }
 
-    // ──────────────────────────────────────────────────────
-    // GET /api/summary
-    // Ringkasan data e-commerce untuk dashboard WMS
-    // ──────────────────────────────────────────────────────
-    public function summary(): JsonResponse
-    {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'total_products'      => Product::count(),
-                'low_stock_products'  => Product::where('stock', '<', 10)->count(),
-                'out_of_stock'        => Product::where('stock', 0)->count(),
-                'total_orders'        => Order::count(),
-                'pending_orders'      => Order::where('status', 'pending')->count(),
-                'processing_orders'   => Order::where('status', 'processing')->count(),
-                'shipped_orders'      => Order::where('status', 'shipped')->count(),
-                'total_revenue'       => (float) Order::where('payment_status', 'paid')->sum('total_price'),
-                'new_orders_today'    => Order::whereDate('created_at', today())->count(),
-            ],
-        ]);
-    }
+   
+   public function summary(): JsonResponse
+{
+    $data = Cache::remember('wms_summary', 30, function () {
+
+        $orders = DB::table('orders')
+            ->selectRaw("
+                COUNT(*) as total_orders,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_orders,
+                SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) as processing_orders,
+                SUM(CASE WHEN status = 'shipped' THEN 1 ELSE 0 END) as shipped_orders,
+                SUM(CASE WHEN payment_status = 'paid' THEN total_price ELSE 0 END) as total_revenue,
+                SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as new_orders_today
+            ")
+            ->first();
+
+        $products = DB::table('products')
+            ->selectRaw("
+                COUNT(*) as total_products,
+                SUM(CASE WHEN stock < 10 THEN 1 ELSE 0 END) as low_stock_products,
+                SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END) as out_of_stock
+            ")
+            ->first();
+
+        return [
+            'total_products'     => $products->total_products,
+            'low_stock_products' => $products->low_stock_products,
+            'out_of_stock'       => $products->out_of_stock,
+
+            'total_orders'       => $orders->total_orders,
+            'pending_orders'     => $orders->pending_orders,
+            'processing_orders'  => $orders->processing_orders,
+            'shipped_orders'     => $orders->shipped_orders,
+
+            'total_revenue'      => (float) $orders->total_revenue,
+            'new_orders_today'   => $orders->new_orders_today,
+        ];
+    });
+
+    return response()->json([
+        'success' => true,
+        'data'    => $data,
+    ]);
+}
 }
