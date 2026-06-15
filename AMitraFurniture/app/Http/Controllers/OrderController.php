@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Cart;
 use App\Models\OrderItem;
+use App\Models\Voucher;
 use App\Helpers\MidtransHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Midtrans\Config;
 use Midtrans\Snap;
+use Inertia\Inertia;
 
 class OrderController extends Controller
 {
@@ -40,7 +42,10 @@ class OrderController extends Controller
             return $cart->product->price * $cart->quantity;
         });
 
-        return view('dashboard.checkout-cart', compact('carts', 'total'));
+        return Inertia::render('Checkout/Cart', [
+            'carts' => $carts,
+            'total' => $total,
+        ]);
     }
 
     /* ==============================
@@ -52,6 +57,7 @@ class OrderController extends Controller
             'alamat' => 'required|string|max:500',
             'nomor_telepon' => 'required|string|max:20',
             'payment_method' => 'required|in:cod,midtrans,transfer_bca,transfer_bri,transfer_mandiri',
+            'voucher_code' => 'nullable|string',
         ]);
 
         $user = Auth::user();
@@ -64,13 +70,31 @@ class OrderController extends Controller
         DB::beginTransaction();
 
         try {
-            $totalPrice = 0;
+            $subtotal = 0;
             $orderCode = 'ORD-' . time() . '-' . $user->id;
 
-            // Hitung total dari semua item di cart
+            // Hitung subtotal dari semua item di cart
             foreach ($carts as $cart) {
-                $totalPrice += $cart->product->price * $cart->quantity;
+                $subtotal += $cart->product->price * $cart->quantity;
             }
+
+            // Proses voucher jika ada
+            $voucherId = null;
+            $discountAmount = 0;
+            $voucher = null;
+
+            if ($request->voucher_code) {
+                $voucher = Voucher::where('code', strtoupper(trim($request->voucher_code)))->first();
+                if ($voucher) {
+                    $validation = $voucher->isValid($subtotal);
+                    if ($validation['valid']) {
+                        $discountAmount = $voucher->calculateDiscount($subtotal);
+                        $voucherId = $voucher->id;
+                    }
+                }
+            }
+
+            $totalPrice = max(0, $subtotal - $discountAmount);
 
             // Set payment deadline 24 jam dari sekarang untuk non-COD
             $paymentDeadline = null;
@@ -82,6 +106,9 @@ class OrderController extends Controller
             $order = Order::create([
                 'user_id' => $user->id,
                 'order_code' => $orderCode,
+                'subtotal' => $subtotal,
+                'discount_amount' => $discountAmount,
+                'voucher_id' => $voucherId,
                 'total_price' => $totalPrice,
                 'payment_method' => $request->payment_method,
                 'payment_status' => 'pending',
@@ -90,6 +117,11 @@ class OrderController extends Controller
                 'alamat' => $request->alamat,
                 'nomor_telepon' => $request->nomor_telepon,
             ]);
+
+            // Increment used_count voucher
+            if ($voucher && $voucherId) {
+                $voucher->increment('used_count');
+            }
 
             // Buat order items untuk setiap produk di cart
             foreach ($carts as $cart) {
@@ -112,6 +144,16 @@ class OrderController extends Controller
                             'price' => (int) $cart->product->price,
                             'quantity' => $cart->quantity,
                             'name' => $cart->product->name,
+                        ];
+                    }
+
+                    // Tambahkan diskon sebagai item negatif jika ada
+                    if ($discountAmount > 0) {
+                        $itemDetails[] = [
+                            'id' => 'DISCOUNT',
+                            'price' => (int) -$discountAmount,
+                            'quantity' => 1,
+                            'name' => 'Diskon Voucher' . ($voucher ? ': ' . $voucher->code : ''),
                         ];
                     }
 
@@ -178,7 +220,7 @@ class OrderController extends Controller
             $order->update(['status' => 'processing']);
         }
 
-        return view('dashboard.payment-page', compact('order'));
+        return Inertia::render('Payment/Page', ['order' => $order]);
     }
 
     /* ==============================
@@ -345,8 +387,10 @@ class OrderController extends Controller
             abort(403, 'Unauthorized access');
         }
 
-        // Cek status pembayaran dari Midtrans
-        // Biasanya callback sudah update status, tapi kita cek ulang untuk keamanan
+        // Cek status pembayaran langsung dari Midtrans API
+        if ($order->payment_status === 'pending') {
+            $this->checkMidtransStatus($order);
+        }
         
         return redirect()->route('payment.success', $order->id);
     }
@@ -363,7 +407,87 @@ class OrderController extends Controller
             abort(403, 'Unauthorized access');
         }
 
-        return view('dashboard.payment-success', compact('order'));
+        return Inertia::render('Payment/Success', ['order' => $order]);
+    }
+
+    /* ==============================
+       UPDATE PAYMENT STATUS (Client-side callback)
+    ============================== */
+    public function updatePaymentStatus(Request $request, $orderId)
+    {
+        $order = Order::findOrFail($orderId);
+
+        // Pastikan order milik user yang sedang login
+        if ($order->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Cek status langsung ke Midtrans API untuk validasi
+        $this->checkMidtransStatus($order);
+
+        return response()->json([
+            'status' => 'success',
+            'payment_status' => $order->fresh()->payment_status,
+        ]);
+    }
+
+    /* ==============================
+       CEK STATUS TRANSAKSI KE MIDTRANS API
+    ============================== */
+    private function checkMidtransStatus(Order $order)
+    {
+        try {
+            $serverKey = config('midtrans.server_key');
+            $baseUrl = config('midtrans.is_production', false)
+                ? 'https://api.midtrans.com'
+                : 'https://api.sandbox.midtrans.com';
+
+            $url = $baseUrl . '/v2/' . $order->order_code . '/status';
+
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Accept: application/json',
+                    'Authorization: Basic ' . base64_encode($serverKey . ':'),
+                ],
+                CURLOPT_SSL_VERIFYPEER => app()->environment('production'),
+                CURLOPT_SSL_VERIFYHOST => app()->environment('production') ? 2 : 0,
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $response) {
+                $result = json_decode($response, true);
+                $transactionStatus = $result['transaction_status'] ?? null;
+                $fraudStatus = $result['fraud_status'] ?? null;
+
+                Log::info('Midtrans status check', [
+                    'order_code' => $order->order_code,
+                    'transaction_status' => $transactionStatus,
+                    'fraud_status' => $fraudStatus,
+                ]);
+
+                if ($transactionStatus == 'capture') {
+                    if ($fraudStatus == 'accept') {
+                        $order->update(['payment_status' => 'paid', 'status' => 'processing']);
+                    }
+                } else if ($transactionStatus == 'settlement') {
+                    $order->update(['payment_status' => 'paid', 'status' => 'processing']);
+                } else if ($transactionStatus == 'deny' || $transactionStatus == 'expire' || $transactionStatus == 'cancel') {
+                    $order->update(['payment_status' => 'failed', 'status' => 'cancelled']);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to check Midtrans status', [
+                'order_code' => $order->order_code,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /* ==============================
@@ -377,6 +501,7 @@ class OrderController extends Controller
             'alamat' => 'required|string|max:500',
             'nomor_telepon' => 'required|string|max:20',
             'payment_method' => 'required|in:cod,midtrans,transfer_bca,transfer_bri,transfer_mandiri',
+            'voucher_code' => 'nullable|string',
         ]);
 
         $user = Auth::user();
@@ -390,8 +515,26 @@ class OrderController extends Controller
         DB::beginTransaction();
 
         try {
-            $totalPrice = $product->price * $request->quantity;
+            $subtotal = $product->price * $request->quantity;
             $orderCode = 'ORD-' . time() . '-' . $user->id;
+
+            // Proses voucher jika ada
+            $voucherId = null;
+            $discountAmount = 0;
+            $voucher = null;
+
+            if ($request->voucher_code) {
+                $voucher = Voucher::where('code', strtoupper(trim($request->voucher_code)))->first();
+                if ($voucher) {
+                    $validation = $voucher->isValid($subtotal);
+                    if ($validation['valid']) {
+                        $discountAmount = $voucher->calculateDiscount($subtotal);
+                        $voucherId = $voucher->id;
+                    }
+                }
+            }
+
+            $totalPrice = max(0, $subtotal - $discountAmount);
 
             // Set payment deadline 24 jam dari sekarang untuk non-COD
             $paymentDeadline = null;
@@ -403,6 +546,9 @@ class OrderController extends Controller
             $order = Order::create([
                 'user_id' => $user->id,
                 'order_code' => $orderCode,
+                'subtotal' => $subtotal,
+                'discount_amount' => $discountAmount,
+                'voucher_id' => $voucherId,
                 'total_price' => $totalPrice,
                 'payment_method' => $request->payment_method,
                 'payment_status' => 'pending',
@@ -411,6 +557,11 @@ class OrderController extends Controller
                 'alamat' => $request->alamat,
                 'nomor_telepon' => $request->nomor_telepon,
             ]);
+
+            // Increment used_count voucher
+            if ($voucher && $voucherId) {
+                $voucher->increment('used_count');
+            }
 
             // Buat order item
             OrderItem::create([
@@ -423,6 +574,25 @@ class OrderController extends Controller
             // Generate Snap Token jika payment method adalah Midtrans
             if ($request->payment_method === 'midtrans') {
                 try {
+                    $itemDetails = [
+                        [
+                            'id' => $product->id,
+                            'price' => (int) $product->price,
+                            'quantity' => $request->quantity,
+                            'name' => $product->name,
+                        ]
+                    ];
+
+                    // Tambahkan diskon sebagai item negatif jika ada
+                    if ($discountAmount > 0) {
+                        $itemDetails[] = [
+                            'id' => 'DISCOUNT',
+                            'price' => (int) -$discountAmount,
+                            'quantity' => 1,
+                            'name' => 'Diskon Voucher' . ($voucher ? ': ' . $voucher->code : ''),
+                        ];
+                    }
+
                     $params = [
                         'transaction_details' => [
                             'order_id' => $orderCode,
@@ -433,14 +603,7 @@ class OrderController extends Controller
                             'email' => $user->email,
                             'phone' => $request->nomor_telepon,
                         ],
-                        'item_details' => [
-                            [
-                                'id' => $product->id,
-                                'price' => (int) $product->price,
-                                'quantity' => $request->quantity,
-                                'name' => $product->name,
-                            ]
-                        ],
+                        'item_details' => $itemDetails,
                     ];
 
                     // Generate Snap Token
@@ -511,7 +674,7 @@ class OrderController extends Controller
                        ->with('orderItems.product')
                        ->latest()
                        ->paginate(10); // Ganti get() dengan paginate()
-        return view('dashboard.order-history', compact('orders'));
+        return Inertia::render('Orders/Index', ['orders' => $orders]);
     }
 
     public function show(Order $order)
@@ -522,7 +685,7 @@ class OrderController extends Controller
         }
 
         $order->load('orderItems.product');
-        return view('dashboard.order-detail', compact('order'));
+        return Inertia::render('Orders/Detail', ['order' => $order]);
     }
 
     /**
@@ -544,7 +707,11 @@ class OrderController extends Controller
         // Available status options
         $statuses = ['pending', 'paid', 'failed', 'expired'];
         
-        return view('dashboard.order-filter', compact('orders', 'status', 'statuses'));
+        return Inertia::render('Orders/Filter', [
+            'orders' => $orders,
+            'status' => $status,
+            'statuses' => $statuses,
+        ]);
     }
 
     /**
@@ -558,6 +725,6 @@ class OrderController extends Controller
         }
 
         $order->load('orderItems.product', 'user');
-        return view('dashboard.order-tracking', compact('order'));
+        return Inertia::render('Orders/Tracking', ['order' => $order]);
     }
 }

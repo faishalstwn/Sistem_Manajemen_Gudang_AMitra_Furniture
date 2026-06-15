@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Voucher;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -32,6 +34,9 @@ class Order extends Model
         'order_code',
         'quantity',
         'total_price',
+        'subtotal',
+        'discount_amount',
+        'voucher_id',
         'payment_method',
         'payment_status',
         'payment_deadline',
@@ -68,5 +73,10 @@ class Order extends Model
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function voucher()
+    {
+        return $this->belongsTo(Voucher::class);
     }
 }

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Cart;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class CartController extends Controller
 {
@@ -24,7 +25,10 @@ class CartController extends Controller
             return $cart->product->price * $cart->quantity;
         });
 
-        return view('dashboard.cart', compact('cartItems', 'total'));
+        return Inertia::render('Cart/Index', [
+            'cartItems' => $cartItems,
+            'total' => $total,
+        ]);
     }
 
     /**

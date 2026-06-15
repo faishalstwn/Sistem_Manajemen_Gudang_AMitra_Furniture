@@ -16,6 +16,9 @@ use App\Http\Controllers\AdminBarangMasukController;
 use App\Http\Controllers\AdminBarangKeluarController;
 use App\Http\Controllers\AdminExportController;
 use App\Http\Controllers\AdminLokasiGudangController;
+use App\Http\Controllers\AdminStockOpnameController;
+use App\Http\Controllers\AdminLaporanGudangController;
+use App\Http\Controllers\VoucherController;
 
 /*
 |--------------------------------------------------------------------------
@@ -111,23 +114,19 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/payment/success/{order}', [OrderController::class, 'paymentSuccess'])
         ->name('payment.success');
+
+    Route::post('/payment/update-status/{order}', [OrderController::class, 'updatePaymentStatus'])
+        ->name('payment.updateStatus');
+
+    // VOUCHER
+    Route::post('/voucher/apply', [VoucherController::class, 'apply'])->name('voucher.apply');
 });
 
-/*
-|--------------------------------------------------------------------------
-| MIDTRANS CALLBACK
-|--------------------------------------------------------------------------
-*/
+
 Route::post('/payment/callback', [OrderController::class, 'callback'])
     ->name('payment.callback');
 
-/*
-|--------------------------------------------------------------------------
-| ================= ADMIN AREA =================
-|--------------------------------------------------------------------------
-| ADMIN TERPISAH & DIAMANKAN
-|--------------------------------------------------------------------------
-*/
+
 
 // LOGIN ADMIN
 Route::get('/admin/login', [AuthController::class, 'loginForm'])
@@ -143,7 +142,7 @@ Route::get('/admin/register', [AuthController::class, 'registerForm'])
 Route::post('/admin/register', [AuthController::class, 'register'])
     ->name('admin.register.store');
 
-// ADMIN AREA
+
 Route::middleware(['auth', 'admin'])->group(function () {
 
     // DASHBOARD + GRAFIK
@@ -152,6 +151,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     
     // LAPORAN WITH OPTIONAL MONTH
     Route::get('/admin/laporan/{bulan?}', [AdminDashboardController::class, 'report'])
+        ->where('bulan', '[0-9]+')
         ->name('admin.laporan');
 
     // PESANAN (UBAH STATUS)
@@ -187,7 +187,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/admin/pengiriman', [AdminOrderController::class, 'shipping'])
         ->name('admin.pengiriman');
 
-    Route::get('/admin/notifikasi', fn () => view('admin.notifikasi'))
+    Route::get('/admin/notifikasi', fn () => \Inertia\Inertia::render('Admin/Notifikasi'))
         ->name('admin.notifikasi');
 
     // ── WMS MONITOR ──────────────────────────────────────────────────────
@@ -272,4 +272,20 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->name('admin.export.pdf.barang-masuk');
     Route::get('/admin/export/pdf/barang-keluar', [AdminExportController::class, 'pdfBarangKeluar'])
         ->name('admin.export.pdf.barang-keluar');
+
+    // ── STOCK OPNAME ──────────────────────────────────────────────────
+    Route::get('/admin/stock-opname', [AdminStockOpnameController::class, 'index'])
+        ->name('admin.stock-opname.index');
+    Route::get('/admin/stock-opname/create', [AdminStockOpnameController::class, 'create'])
+        ->name('admin.stock-opname.create');
+    Route::post('/admin/stock-opname', [AdminStockOpnameController::class, 'store'])
+        ->name('admin.stock-opname.store');
+    Route::get('/admin/stock-opname/{stockOpname}', [AdminStockOpnameController::class, 'show'])
+        ->name('admin.stock-opname.show');
+    Route::post('/admin/stock-opname/{stockOpname}/approve', [AdminStockOpnameController::class, 'approve'])
+        ->name('admin.stock-opname.approve');
+
+    // ── LAPORAN GUDANG ────────────────────────────────────────────────
+    Route::get('/admin/laporan-gudang', [AdminLaporanGudangController::class, 'index'])
+        ->name('admin.laporan-gudang.index');
 });
